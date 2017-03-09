@@ -5,6 +5,17 @@ import numpy as np
 
 
 def OHT(X, y, Kn=0):
+    """
+        Compute the OGA path with length Kn.
+        ----------
+        X : {array-like}, shape = (n, p)
+            Covariates.
+        y : {array-like}, shape = (n)
+            Dependent data.
+        Kn : int
+            Length of the path.
+    """
+    
     #Taking care of parameters. se_catcher is not necessarily needed here.
     len_ = len(X[:,1])
     p_ = len(X[1,:])
