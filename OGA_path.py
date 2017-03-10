@@ -47,7 +47,6 @@ def OGA(X, y, Kn=0):
     for k in np.arange(Kn)[np.arange(Kn) != 0]:
         for j in range(p_):
             se_[j] = np.abs(np.dot(u, X[:,j]))
-        print(se_[range(10)])
         #se_[jhat[jhat != -1]] = 0 #Just to make sure
         jhat[k] = np.argmax(se_)
         #Orthogonalizing
