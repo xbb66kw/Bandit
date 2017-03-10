@@ -4,7 +4,7 @@
 import numpy as np
 
 
-def OHT(X, y, Kn=0):
+def OGA(X, y, Kn=0):
     """
         Compute the OGA path with length Kn.
         ----------
@@ -68,7 +68,7 @@ def main():
     coef_ = np.array([4.2, -3.7, 5.1, -5.7, 3.5])
     X = np.random.normal(0,1.5,n * p).reshape(n,p)
     y = np.random.normal(0,1,n) + np.dot(X[:,0:q], coef_.transpose())
-    print(OHT(X, y))
+    print(OGA(X, y))
 
 if __name__ == '__main__':
     main()
