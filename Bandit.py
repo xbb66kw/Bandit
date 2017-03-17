@@ -2,7 +2,6 @@
 
 
 import numpy as np
-from Bandit_oracle import bandit_oracle
 from OGA_path import OGA
 
 def bandit_low(data, residuals, coef):
@@ -124,7 +123,7 @@ def bandit_high(data, residuals, coef):
 				
 				for k in range(len_):
 								weights = weights_calculator(estimates, data_[k,:], beta, K, p / K)
-								weights = weights * (1 - K * p) + np.ones(K) * p
+								
 								#print(mid)
 								selection[k] = np.random.choice(range(K), 1, p=weights)
 								
@@ -148,7 +147,7 @@ def bandit_high(data, residuals, coef):
 																results[selection[k]].ravel())
 												#print(k)
 												temp_context_ = arms_context[selection[k]][:,path_]
-												#print(path_)
+												
 												estimates[selection[k]] = np.zeros(len_coef)
 												estimates[selection[k]][path_] = np.linalg.inv(
 																				temp_context_.transpose().dot(
@@ -251,7 +250,7 @@ def bandit_bylearning(data, residuals, coef, n_algo=2):
 												#mid_[j] = min(mid_[j], 20)
 			
 								for j in range(n_algo):
-												belief[j] = belief[j] * np.exp(mid_[j] * 0.1)
+												belief[j] = belief[j] * np.exp(mid_[j] * 0.001)
 								#belief = np.array([1,0])
 								#print(belief)
 								#print(mid_)
@@ -269,6 +268,47 @@ def bandit_bylearning(data, residuals, coef, n_algo=2):
 				print(belief, weights)
 				return selection, estimates
 
+def bandit_oracle(data, coef):
+				"""Run the oracle algorithm on the context.
+				
+				Parameters
+				----------
+				data : {array-like}, shape = (n_sample, n_context)
+								Context.
+								
+				residuals : {array-like}, shape = (n_sample, n_context * K)
+								Random terms for each arm at every stage. 'K arms' is necessary 
+								if we want to compare to the oracle.
+								
+				coef : {array-like}, shape = (n_context * K)
+								Coefficients of each arms.
+				
+				Returns
+				-------
+				X : {array-like}, shape = (n_sample)
+								The selected arms' indexes at each stage.
+				
+				y : float
+								Sample risk.
+				"""				
+				len_ = len(data[:,0])
+				coef_ = coef
+				len_coef = len(data[0,:])
+				data_ = data
+				K = coef_.shape[0]
+				
+				mid = np.zeros(K)
+				selection = np.zeros(len_).astype(int)
+
+				
+				for k in range(len_):
+								for j in range(K):	
+												mid[j] = np.dot(coef_[j], data_[k,:])
+								selection[k] = mid.argmax()
+				
+				return selection
+
+
 def risk_calculator(x, e, coef_, selection):
 				len_ = len(x[:,0])
 				sum_ = 0
@@ -281,7 +321,7 @@ def risk_calculator(x, e, coef_, selection):
 def weights_calculator(estimates, data_, beta, K, p):
 				
 				mid = np.zeros(K)
-				beta = 5.0
+				beta = 7.0
 				for j in range(K):
 								#print(np.dot(estimates[j], data_) )
 								mid[j] = (np.dot(estimates[j], data_) *  beta) 
@@ -333,8 +373,9 @@ def low_update(context, results):
 				
 def main():
 				n = 1000
-				p = 100
-				n_arm = 6
+				p = 30
+				q = 15
+				n_arm = 10
 				divide = 1
 				x = np.random.uniform(0,1,p * n).reshape(n, p)#np.abs(np.random.normal(0,0.2,p * n).reshape(n,p))
 				#x = np.random.normal(0,1,p * n)
@@ -343,7 +384,7 @@ def main():
 				for j in range(n):
 								x[j,:] = x[j,:] / np.sqrt(np.dot(x[j,:], x[j,:])) 
 				#print(x)
-				e = np.random.normal(0,0.01,n_arm * n).reshape(n,n_arm)
+				e = np.random.normal(0,0.00,n_arm * n).reshape(n,n_arm)
 				
 				#non-sparse example. High-dimension tends to perform badly
 				A = [np.empty((0, p), int) for _ in range(int(n_arm / divide))]
@@ -354,32 +395,28 @@ def main():
 				coef_ = np.array(A)
 				#coef_ = np.array(np.vstack([A, [_ / 2 for _ in A]])) * 1 #Cool!
 				
-				coef_high = np.array([np.zeros(p) for _ in range(int(n_arm / divide))])
-				for j in range(n_arm):
-								#print(coef_high[j])
-								#print(coef_high[j][np.random.choice(range(p), 3, replace=False).astype(int)])
-								coef_high[j][np.random.choice(range(p), 3, replace=False).astype(int)] \
-												= np.random.uniform(0,10, 3)
-								coef_high[j] = coef_high[j] / np.sqrt(np.dot(coef_high[j], coef_high[j]))
-
-				#coef_ = coef_high
+				
+				coef_high = np.array([np.hstack([[2,6,4], np.zeros(p-3)]),
+								np.hstack([[2,4,6], np.zeros(p-3)])[::-1],
+				np.hstack([[6,2,4], np.zeros(p-3)])])
+				coef_ = coef_high
 				for elem in coef_:
 								print(elem.round(4))
-				
+				#print(sum(A[0] == 0))
+				#print(sum(A[0] == 1))
+				#print(sum(A[0] == 2))
+				#print(A[1])
+				#print(bandit_oracle(x, e, coef_, 3))
 				
 				select_1 = bandit_oracle(x, coef_)
 				select_2 = bandit_low(x, e, coef_)
 				select_3 = bandit_high(x, e, coef_)
 				select_4 = bandit_bylearning(x, e, coef_)
 				#select_5 = bandit_low(x, e, coef_) These algorithm possess some randomness
-				#random
-				
 				print(risk_calculator(x, e, coef_, select_1))
-				print(risk_calculator(x, e, coef_, select_2[0]), 'low')
-				print(risk_calculator(x, e, coef_, select_3[0]), 'high')
-				print(risk_calculator(x, e, coef_, select_4[0]), 'bylearning')
-				select_random = np.random.randint(0, coef_.shape[0], n)
-				print(risk_calculator(x, e, coef_, select_random), 'random')
+				print(risk_calculator(x, e, coef_, select_2[0]))
+				print(risk_calculator(x, e, coef_, select_3[0]))
+				print(risk_calculator(x, e, coef_, select_4[0]))
 				#print(risk_calculator(x, e, coef_, select_5[0]))
 				#print(select_2[1].round(4))
 				#print(select_4[0])				
@@ -387,13 +424,13 @@ def main():
 				'''
 				for elem in select_2[1]:
 								print(elem.round(4))
-				'''
+				
 				for elem in select_4[1]:
 								for _ in elem:
 												pass#print(_.round(4))
-				#for elem in select_4[1][1]:
-				#				print(elem.round(4))
-				
+				for elem in select_4[1][1]:
+								print(elem.round(4))
+				'''
 if __name__ == '__main__':
     main()
     
