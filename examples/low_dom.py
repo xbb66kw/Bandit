@@ -137,13 +137,13 @@ def main():
 				'''
 				Save the simulating data
 				'''
-				'
+				'''
 				np.save("/Users/xbb/Desktop/OGA-test/data/low_oracle.npy", X_oracle)
 				np.save("/Users/xbb/Desktop/OGA-test/data/low_low.npy", X_low)
 				np.save("/Users/xbb/Desktop/OGA-test/data/low_high.npy", X_high)
 				np.save("/Users/xbb/Desktop/OGA-test/data/low_bylearning.npy", X_bylearning)
 				np.save("/Users/xbb/Desktop/OGA-test/data/low_random.npy", X_random)
-				'
+				'''
 if __name__ == '__main__':
     main()
     
