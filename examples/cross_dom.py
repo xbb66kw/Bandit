@@ -122,12 +122,12 @@ def main():
 				Save the simulating data
 				'''
 								
-				'
+				'''
 				np.save("/Users/xbb/Desktop/OGA-test/data/cross_oracle.npy", X_oracle)
 				np.save("/Users/xbb/Desktop/OGA-test/data/cross_low.npy", X_low)
 				np.save("/Users/xbb/Desktop/OGA-test/data/cross_cross.npy", X_cross)
 				np.save("/Users/xbb/Desktop/OGA-test/data/cross_random.npy", X_random)
-				'
+				'''
 				
 
 if __name__ == '__main__':
