@@ -1,5 +1,4 @@
 
-
 import numpy as np
 
 
@@ -80,7 +79,6 @@ class Graph(object):
     def length(self):
         return self.__len
    
-
     def argmax_within_keys(self, keys):
         'return the selected node'
         
@@ -109,7 +107,7 @@ class Graph(object):
                         counts += self.__nodes[j].length                        
                         value += np.sum(self.__nodes[j].values)                  
                     sum_ += np.power(self.rho, p) * value / counts
-   
+            
             inverse_deflator = 0
             for p in range(far_):
                 inverse_deflator += np.power(self.rho, p)         
@@ -341,16 +339,68 @@ def nodes_generator(edges_matrix, values=None):
 
 class Groups(object):
     
-    def __init_(self, graph):
-        self.__group_list = range(graph.length) 
-        pass
-    def argmax(self):
-        pass
-    def update(self, pick, value):
-        pass
+    def __init__(self, graph):
+        self.__graph = graph
+        self.__group_list = [np.arange(graph.length)]
+        self.__class_number = 1
 
-
-
+    def argmax_groups(self):
+        results = np.zeros(self.class_number)
+        
+        for i in range(self.class_number):
+            results[i] = self.graph.center_value(self.__group_list[i])
+            
+        return np.argmax(results)
+        
+    def update(self, pick, value, group):
+        '''
+        value is added into pick
+        
+        pick: scalar
+        value: scalar
+        group: scalar
+        
+        return if there's newly created group
+        '''
+        self.__graph.nodes[pick].add(value)
+        
+        related_nodes = []
+        for d in range(self.__graph.d):
+            related_nodes = np.union1d(related_nodes,\
+                self.__graph.nodes_connect(pick, d + 1))
+        
+        check_create = True
+        
+        if group is not 0:            
+            for index, class_list in enumerate(self.__group_list):
+                if index is not group and index is not 0 and\
+                    np.intersect1d(class_list, related_nodes):
+                        
+                    check_create = False
+                    self.__group_list[group] = np.append(self.__group_list[group], class_list)
+                    self.__group_list[index] = []                    
+                    
+        else:
+            combined = []
+            for index, class_list in enumerate(self.__group_list):
+                if index is not 0 and\
+                    np.intersect1d(self.__group_list[index], related_nodes):
+                        
+                    check_create = False
+                    combined = np.append(combined, index)
+                    
+            if combined:                    
+                head = combined.pop(0)
+                self.__group_list[head] = np.append(self.__group_list[head], related_nodes)
+                for i in combined:
+                    self.__group_list[head] = np.append(self.__group_list[head], self.__group_list[i])
+                    self.__group_list[i] = []
+                    
+        if check_create:
+            self.__group_list.append([related_nodes, pick])
+        
+        self.__group_list[0] = np.setdiff1d(self.__group_list[0], related_nodes)
+        return check_create 
 ##Test
 
 M = np.array([[0,0,0,0],[1,0,0,0],[0,1,0,0],[0,1,1,0]])#half-triangular
