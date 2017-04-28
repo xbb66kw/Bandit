@@ -344,149 +344,149 @@ def nodes_generator(edges_matrix, values=None):
 
 
 class Groups(object):
-				
-				def __init__(self, graph):
-								self.__graph = graph
-								self.__group_list = [np.arange(graph.length)]
-								self.__class_number = 1
-								self.k = 1 # For the unknown
-								
-				def argmax_groups(self):
-								if self.__class_number == 1:
-												return 0
-								else:
-												results = np.zeros(self.__class_number)
-												
-												
-												
-												for i in range(self.__class_number)[1:]:
-																if self.__group_list[i].size:
-																				results[i] = self.__graph.center_value(self.__graph.picked(self.__group_list[i]))
-																else:
-																				results[i] = -100 # for example
-																				
-												
-												
-												if self.__group_list[0].size:
-																results[0] = np.mean(results[1:]) + self.k * np.std(results[1:])
-												else:
-																results[0] = -100 # for example
-												return np.argmax(results)
-												
+    
+    def __init__(self, graph):
+        self.__graph = graph
+        self.__group_list = [np.arange(graph.length)]
+        self.__class_number = 1
+        self.k = 1 # For the unknown
+        
+    def argmax_groups(self):
+        if self.__class_number == 1:
+            return 0
+        else:
+            results = np.zeros(self.__class_number)
+            
+            
+            
+            for i in range(self.__class_number)[1:]:
+                if self.__group_list[i].size:
+                    results[i] = self.__graph.center_value(self.__graph.picked(self.__group_list[i]))
+                else:
+                    results[i] = -100 # for example
+                    
+            
+            
+            if self.__group_list[0].size:
+                results[0] = np.mean(results[1:]) + self.k * np.std(results[1:])
+            else:
+                results[0] = -100 # for example
+            return np.argmax(results)
+            
 
-				def argmax_within_group(self, group):
-								'''group: scalar'''
-								
-								group_list = self.__group_list
-								
-								
-								if group == 0:
-												len_ = len(group_list[group])
-												
-												return group_list[group][(np.random.random_integers(len_, size=1)[0] - 1)]
-								else:
-												return self.__graph.argmax_within_keys(group_list[group])
+    def argmax_within_group(self, group):
+        '''group: scalar'''
+        
+        group_list = self.__group_list
+        
+        
+        if group == 0:
+            len_ = len(group_list[group])
+            
+            return group_list[group][(np.random.random_integers(len_, size=1)[0] - 1)]
+        else:
+            return self.__graph.argmax_within_keys(group_list[group])
 
-				def update(self, pick, value, group):
-								'''
-								value is added into pick
-								
-								pick: scalar
-								value: scalar
-								group: scalar
-								
-								return if there's newly created group
-								'''
-								
-								self.__graph.nodes(np.array([pick]))[0].add(value)
-								
-								related_nodes = np.array([]).astype(int)
-								
-								for d in range(self.__graph.d):
-												related_nodes = np.union1d(related_nodes,\
-																self.__graph.nodes_connect(pick, d + 1))
-								
-								check_create = True
-								if not self.__group_list[0].size:												
-												check_create = False
+    def update(self, pick, value, group):
+        '''
+        value is added into pick
+        
+        pick: scalar
+        value: scalar
+        group: scalar
+        
+        return if there's newly created group
+        '''
+        
+        self.__graph.nodes(np.array([pick]))[0].add(value)
+        
+        related_nodes = np.array([]).astype(int)
+        
+        for d in range(self.__graph.d):
+            related_nodes = np.union1d(related_nodes,\
+                self.__graph.nodes_connect(pick, d + 1))
+        
+        check_create = True
+        if not self.__group_list[0].size:            
+            check_create = False
 
-								
-								
-								
-								if group is not 0:            
-												for index, class_list in enumerate(self.__group_list):
-																if index != group and index != 0 and\
-																				np.intersect1d(class_list, related_nodes):
-																								
-																				check_create = False
-																				self.__group_list[group] = np.asarray(np.append(self.__group_list[group], class_list))
-																				self.__group_list[index] = np.array([])                    
-																				
-								else:
-												combined = []
-												for index, class_list in enumerate(self.__group_list):
-																if index != 0 and\
-																				np.intersect1d(self.__group_list[index], related_nodes):
-																								
-																				check_create = False
-																				combined = np.append(combined, index)
-																				
-												if combined:        
-																
-																head = combined.pop(0)
-																
-																self.__group_list[head] = np.asarray(np.append(self.__group_list[head], related_nodes))
-																for i in combined:
-																				self.__group_list[head] = np.asarray(np.append(self.__group_list[head], self.__group_list[i]))
-																				self.__group_list[i] = np.array([])
-																				
-								if check_create:
-												self.__group_list.append(np.asarray((np.append(related_nodes, pick))))
-												
-								
-								self.__group_list[0] = np.setdiff1d(self.__group_list[0], np.append(related_nodes, pick))
-								
-								self.__class_number = len(self.__group_list)
-								
-								return check_create
+        
+        
+        
+        if group is not 0:            
+            for index, class_list in enumerate(self.__group_list):
+                if index != group and index != 0 and\
+                    np.intersect1d(class_list, related_nodes):
+                        
+                    check_create = False
+                    self.__group_list[group] = np.asarray(np.append(self.__group_list[group], class_list))
+                    self.__group_list[index] = np.array([])                    
+                    
+        else:
+            combined = []
+            for index, class_list in enumerate(self.__group_list):
+                if index != 0 and\
+                    np.intersect1d(self.__group_list[index], related_nodes):
+                        
+                    check_create = False
+                    combined = np.append(combined, index)
+                    
+            if combined:        
+                
+                head = combined.pop(0)
+                
+                self.__group_list[head] = np.asarray(np.append(self.__group_list[head], related_nodes))
+                for i in combined:
+                    self.__group_list[head] = np.asarray(np.append(self.__group_list[head], self.__group_list[i]))
+                    self.__group_list[i] = np.array([])
+                    
+        if check_create:
+            self.__group_list.append(np.asarray((np.append(related_nodes, pick))))
+            
+        
+        self.__group_list[0] = np.setdiff1d(self.__group_list[0], np.append(related_nodes, pick))
+        
+        self.__class_number = len(self.__group_list)
+        
+        return check_create
 
 class Distribution(object):
-				def __init__(self):
-								pass
-				def play(self, key):
-								return np.random.normal(0, 1, 1)[0]
-								
-								
+    def __init__(self):
+        pass
+    def play(self, key):
+        return np.random.normal(0, 1, 1)[0]
+        
+        
 class Environment(object):
-				
-				def __init__(self, distribution, groups):
-								self.__distribution = distribution
-								self.__groups = groups
-								
-				def run(self, T):
-								groups = self.__groups
-								distribution = self.__distribution
-								played_path = np.array([])
-								recorded_values = np.array([])
-								
-								for t in range(T):
-												group = groups.argmax_groups()
-												
-												pick = groups.argmax_within_group(group)
-												
-												
-												
-												'Drawing'
-												value = distribution.play(pick)
-												
-												played_path = np.append(played_path, pick)
-												recorded_values = np.append(recorded_values, value)
-												
-												groups.update(pick, value, group)
-								
-								print(played_path)
-								
-								plt.plot(recorded_values / (np.arange(T) + 1))
-								plt.show()
-								
-								
+    
+    def __init__(self, distribution, groups):
+        self.__distribution = distribution
+        self.__groups = groups
+        
+    def run(self, T):
+        groups = self.__groups
+        distribution = self.__distribution
+        played_path = np.array([])
+        recorded_values = np.array([])
+        
+        for t in range(T):
+            group = groups.argmax_groups()
+            
+            pick = groups.argmax_within_group(group)
+            
+            
+            
+            'Drawing'
+            value = distribution.play(pick)
+            
+            played_path = np.append(played_path, pick)
+            recorded_values = np.append(recorded_values, value)
+            
+            groups.update(pick, value, group)
+        
+        print(played_path)
+        
+        plt.plot(recorded_values / (np.arange(T) + 1))
+        plt.show()
+        
+       	
