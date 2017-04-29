@@ -4,6 +4,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+import operator#for argmax dictionary
+
 class DataReader(object):
     def __init__(self):
         
@@ -99,16 +101,22 @@ class ArticlesCollector(object):
         return self.active_articles
         
         
+        
+        
+        
+        
 class Groups(object):
     def __init__(self, articles_collector):
         self.articles_collector = articles_collector# To handle the articles appering event
         
         self.groups = {} #dictionary of list of numpy array, article:array-like keys
-        #self.groups_set = {}
+        
+        
+        
         
         self.all_active_nodes = {} #dictionary, key:node
         
-        self.peaks = {} #article: sets of keys
+        self.peaks = {} #article: lists of keys
         
         
     def update(self, key, node, article):
@@ -120,8 +128,7 @@ class Groups(object):
         self.all_active_nodes.update(key, node)
         
         if not self.groups[article]:
-            self.groups[article] = np.array([])
-        
+            self.groups[article] = []
         G = self.groups[article]
         
         
@@ -130,7 +137,7 @@ class Groups(object):
         elif len(node.__group(article)) == 1:
             G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], key)
         else:
-            G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], key)#Add the key first.
+            G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], key) # Add the key first.
             
             for index in node.__group(article)[1:]:
                 G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], G[index])
@@ -142,11 +149,10 @@ class Groups(object):
         in_use = self.articles_collector.active_articles
         
         for article in self.groups and article in in_use:
-            self.peaks[article] = self.__peaks(self.groups[article])#return a list of sets
- 
+            self.peaks[article] = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article, self) #return a list of sets
+            '''working'''
     
-    def __peaks(self):
-        pass
+    
     
     @property
     def get_peaks(self):
@@ -175,18 +181,25 @@ class Node(object):
         
         
         self.d = 4 #Basic distant parameter
+        self.rho = 0.9 #deflator coefficient
+        self.q = 0.8
+        self.k = 1.5
         
         '''self.groups will be useless after joining the party, article: set of groups'''
         self.groups = {}
         
-        self.distant_sets = [] #For look-up
+        self.distant_sets = [] #list of lists
 
-        self.reachable_set = set()
+        self.reachable_set = set()#keys are saved here as a set
+        self.reachable_list = []#nodes are saved here as a list
+        
         
         for i in range(self.d):
             self.distant_sets.append(set())
+        '''
         for i in range(self.d):
             self.distant_lists.append(np.array([]))
+        '''
         
     def update(self, reward, article, groups):
         '''
@@ -212,9 +225,9 @@ class Node(object):
         
         
     def __join_the_party(self, current_groups, article):
-        'Count the distants and groups, and then update curren groups object'
-        groups = current_groups.get_groups[article]#list of numpy array
-        nodes = current_groups.all_nodes#dictionary, key:node
+        'Count the distants and groups, and then update current groups object'
+        groups = current_groups.get_groups[article] #list of numpy array
+        nodes = current_groups.all_nodes #dictionary, key:node
         
         self.groups[article] = set()
 
@@ -225,8 +238,9 @@ class Node(object):
                 else:
                     d = NodesUtil.distant(key, self.key)
                     if d <= self.d:
-                        self.__distant_update(d, key)# added in self
-                        nodes[key].__distant_update(d, self.key)# adding in theirs
+                    				target_node = nodes[key]
+                        self.__distant_update(d, key, target_node)# added in self
+                        target_node.__distant_update(d, self.key, target_node)# adding in theirs
                        
                         
                         self.groups[article].add(group)
@@ -241,10 +255,65 @@ class Node(object):
     def __group(self, article):
         return list(self.groups[article]).sort()#list-like
     
-    def __distant_update(self, distant, key):
+    def __distant_update(self, distant, key, node):
         self.distant_sets[(distant-1)].add(key)
         self.reachable_set.add(key)
-        
+        self.reachable_list.append(node)
+    
+    
+    def value(self, article, current_groups):
+    				'''
+    				current_groups: dictonary, key:node
+								'''
+								values = np.array([])
+								for node in self.reachable_list:
+												values = np.append(values, append(node.average(article)))
+												
+								values = np.append(values, self.average(article))
+								
+								length = len(values)
+								
+								return np.sort(values)[np.floor((1 - self.q) * length)] * np.log(length+1)
+								
+								'''
+								'wrong coding but will be useful in other case'
+    				defactor = 0
+    				values = []
+    				for index in range(self.d):
+    								values.append(0)
+    								
+    				for index in self.distant_sets:
+    								clicks = 0
+    								counts = 0
+    								for key in self.distant_sets[index]:
+    												node = current_groups[key]
+																clicks += node.clicks(article)
+																counts += node.counts(article)
+												if counts:
+																values[index] = clicks / counts
+																
+								mid_ = 0
+								vector = 0
+								for index in values:
+												if values[index]:
+																mid_ += np.power(self.rho, index)
+																vector += np.power(self.rho, index) * values[index]
+								'''
+								
+    				
+    				
+    
+    @property
+    def neighbors(self):
+    				return self.reachable_set
+    
+    def clicks(self, article):
+    				return self.clicks[article]
+    def counts(self, article):
+    				return self.counts[article]
+    def average(self, article):
+    				return self.clicks[article] / self.counts[article]
+    
 class NodesUtil(object):
     def __init__(self, groups):
         self.groups = groups
@@ -258,7 +327,80 @@ class NodesUtil(object):
         key2 = np.array([int(i) for i in list(key2) if i != '\n'])
         
         return np.sum(np.power((key1 - key2), 2))
-        
+    
+    
+    '''working'''
+    @staticmethod
+    def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article, current_groups):
+								'''return a list of lists of peaks'''
+								'''
+								sets_of_nodes_in_groups = []
+								for index in list_of_keys:
+												mid_ = set()
+												[mid_.add(dic_of_all_active_nodes[key]) for key in list_of_keys[index]]
+												
+												sets_of_nodes_in_groups.append(mid_)
+								pass
+								'''
+								
+								active_nodes = dic_of_all_active_nodes
+								
+								
+								group_peaks = []
+    				group_values = []
+    				
+    				
+    				for index in list_of_arrays_of_keys:
+    								list_ = list_of_arrays_of_keys[index]
+    								mid_ = set()
+    								length = len(list_)
+    								
+    								temp_path_keys = []
+    								temp_path_nodes = []
+    								
+    								subset_nodes = {}
+    								for key in list_:
+    												subset_nodes.update(key, active_nodes[key])
+    												
+    								while len(mid_) < length:
+    												
+    												values_dic = {}
+    												
+    												for key in list_:
+    																if not key in mid_:
+    																				values_dic.update(key, subset_nodes[key].value(article, current_groups))
+    												
+    												
+    												argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
+    												
+    												mid_node = subset_nodes[argmax_key]#don't need to loo-up twice
+    												temp_path_keys.append(argmax_key)
+    												temp_path_nodes.append(mid_node)
+    												mid_.update(mid_node.neighbors)
+    								
+    								
+    								
+    								
+    								
+    								group_values.append(NodesUtils.__path_value(temp_path_nodes, subset_nodes))
+    								group_peaks.append(temp_path_keys)
+    				
+    				
+    				'''Find the k-sigma high peaks and return them as group_peaks'''
+    				threshold = self.k * np.std(group_values) + np.mean(group_values)
+    				subset = [index for index in range(len(group_values)) if group_values[index] >= threshold]
+    				return [group_peaks[index] for index in subset]
+    				
+    '''working'''
+    @staticmethod
+    def __path_value(self, path_of_nodes, subset_nodes):
+    				'''
+    				return computed value
+								'''
+								
+								pass
+    
+    
 def main():
     
     
