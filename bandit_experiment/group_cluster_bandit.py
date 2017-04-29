@@ -238,7 +238,7 @@ class Node(object):
                 else:
                     d = NodesUtil.distant(key, self.key)
                     if d <= self.d:
-                    				target_node = nodes[key]
+                        target_node = nodes[key]
                         self.__distant_update(d, key, target_node)# added in self
                         target_node.__distant_update(d, self.key, target_node)# adding in theirs
                        
@@ -262,57 +262,57 @@ class Node(object):
     
     
     def value(self, article, current_groups):
-    				'''
-    				current_groups: dictonary, key:node
-								'''
-								values = np.array([])
-								for node in self.reachable_list:
-												values = np.append(values, append(node.average(article)))
-												
-								values = np.append(values, self.average(article))
-								
-								length = len(values)
-								
-								return np.sort(values)[np.floor((1 - self.q) * length)] * np.log(length+1)
-								
-								'''
-								'wrong coding but will be useful in other case'
-    				defactor = 0
-    				values = []
-    				for index in range(self.d):
-    								values.append(0)
-    								
-    				for index in self.distant_sets:
-    								clicks = 0
-    								counts = 0
-    								for key in self.distant_sets[index]:
-    												node = current_groups[key]
-																clicks += node.clicks(article)
-																counts += node.counts(article)
-												if counts:
-																values[index] = clicks / counts
-																
-								mid_ = 0
-								vector = 0
-								for index in values:
-												if values[index]:
-																mid_ += np.power(self.rho, index)
-																vector += np.power(self.rho, index) * values[index]
-								'''
-								
-    				
-    				
+        '''
+        current_groups: dictonary, key:node
+        '''
+        values = np.array([])
+        for node in self.reachable_list:
+            values = np.append(values, append(node.average(article)))
+            
+        values = np.append(values, self.average(article))
+        
+        length = len(values)
+        
+        return np.sort(values)[np.floor((1 - self.q) * length)] * np.log(length+1)
+        
+        '''
+        'wrong coding but will be useful in other case'
+        defactor = 0
+        values = []
+        for index in range(self.d):
+            values.append(0)
+            
+        for index in self.distant_sets:
+            clicks = 0
+            counts = 0
+            for key in self.distant_sets[index]:
+                node = current_groups[key]
+                clicks += node.clicks(article)
+                counts += node.counts(article)
+            if counts:
+                values[index] = clicks / counts
+                
+        mid_ = 0
+        vector = 0
+        for index in values:
+            if values[index]:
+                mid_ += np.power(self.rho, index)
+                vector += np.power(self.rho, index) * values[index]
+        '''
+        
+        
+        
     
     @property
     def neighbors(self):
-    				return self.reachable_set
+        return self.reachable_set
     
     def clicks(self, article):
-    				return self.clicks[article]
+        return self.clicks[article]
     def counts(self, article):
-    				return self.counts[article]
+        return self.counts[article]
     def average(self, article):
-    				return self.clicks[article] / self.counts[article]
+        return self.clicks[article] / self.counts[article]
     
 class NodesUtil(object):
     def __init__(self, groups):
@@ -332,73 +332,73 @@ class NodesUtil(object):
     '''working'''
     @staticmethod
     def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article, current_groups):
-								'''return a list of lists of peaks'''
-								'''
-								sets_of_nodes_in_groups = []
-								for index in list_of_keys:
-												mid_ = set()
-												[mid_.add(dic_of_all_active_nodes[key]) for key in list_of_keys[index]]
-												
-												sets_of_nodes_in_groups.append(mid_)
-								pass
-								'''
-								
-								active_nodes = dic_of_all_active_nodes
-								
-								
-								group_peaks = []
-    				group_values = []
-    				
-    				
-    				for index in list_of_arrays_of_keys:
-    								list_ = list_of_arrays_of_keys[index]
-    								mid_ = set()
-    								length = len(list_)
-    								
-    								temp_path_keys = []
-    								temp_path_nodes = []
-    								
-    								subset_nodes = {}
-    								for key in list_:
-    												subset_nodes.update(key, active_nodes[key])
-    												
-    								while len(mid_) < length:
-    												
-    												values_dic = {}
-    												
-    												for key in list_:
-    																if not key in mid_:
-    																				values_dic.update(key, subset_nodes[key].value(article, current_groups))
-    												
-    												
-    												argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
-    												
-    												mid_node = subset_nodes[argmax_key]#don't need to loo-up twice
-    												temp_path_keys.append(argmax_key)
-    												temp_path_nodes.append(mid_node)
-    												mid_.update(mid_node.neighbors)
-    								
-    								
-    								
-    								
-    								
-    								group_values.append(NodesUtils.__path_value(temp_path_nodes, subset_nodes))
-    								group_peaks.append(temp_path_keys)
-    				
-    				
-    				'''Find the k-sigma high peaks and return them as group_peaks'''
-    				threshold = self.k * np.std(group_values) + np.mean(group_values)
-    				subset = [index for index in range(len(group_values)) if group_values[index] >= threshold]
-    				return [group_peaks[index] for index in subset]
-    				
+        '''return a list of lists of peaks'''
+        '''
+        sets_of_nodes_in_groups = []
+        for index in list_of_keys:
+            mid_ = set()
+            [mid_.add(dic_of_all_active_nodes[key]) for key in list_of_keys[index]]
+            
+            sets_of_nodes_in_groups.append(mid_)
+        pass
+        '''
+        
+        active_nodes = dic_of_all_active_nodes
+        
+        
+        group_peaks = []
+        group_values = []
+        
+        
+        for index in list_of_arrays_of_keys:
+            list_ = list_of_arrays_of_keys[index]
+            mid_ = set()
+            length = len(list_)
+            
+            temp_path_keys = []
+            temp_path_nodes = []
+            
+            subset_nodes = {}
+            for key in list_:
+                subset_nodes.update(key, active_nodes[key])
+                
+            while len(mid_) < length:
+                
+                values_dic = {}
+                
+                for key in list_:
+                    if not key in mid_:
+                        values_dic.update(key, subset_nodes[key].value(article, current_groups))
+                
+                
+                argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
+                
+                mid_node = subset_nodes[argmax_key]#don't need to loo-up twice
+                temp_path_keys.append(argmax_key)
+                temp_path_nodes.append(mid_node)
+                mid_.update(mid_node.neighbors)
+            
+            
+            
+            
+            
+            group_values.append(NodesUtils.__path_value(temp_path_nodes, subset_nodes))
+            group_peaks.append(temp_path_keys)
+        
+        
+        '''Find the k-sigma high peaks and return them as group_peaks'''
+        threshold = self.k * np.std(group_values) + np.mean(group_values)
+        subset = [index for index in range(len(group_values)) if group_values[index] >= threshold]
+        return [group_peaks[index] for index in subset]
+        
     '''working'''
     @staticmethod
     def __path_value(self, path_of_nodes, subset_nodes):
-    				'''
-    				return computed value
-								'''
-								
-								pass
+        '''
+        return computed value
+        '''
+        
+        pass
     
     
 def main():
