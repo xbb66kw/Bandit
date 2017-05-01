@@ -104,8 +104,30 @@ class ArticlesCollector(object):
         
         
         
+'''working'''   
+class Assigner(object):
+    def __init__(self, groups_object):
+        '''saving all nodes'''
+        self.all_nodes = {}
+        self.all_nodes_set = set()
+        self.groups_object = groups_object
         
         
+    def assign(self, key):
+        '''
+        key is a string
+        '''
+        
+        
+        if key in self.all_nodes_set:
+            return self.all_nodes[key]
+        else:
+            node = Nodes(key, self.groups_object)
+            self.all_nodes[key] = node
+            self.all_nodes_set.add(key)
+            return node
+            
+
         
         
         
@@ -122,6 +144,8 @@ class Groups(object):
         '''Node reads this and scan through the updated peaks accordingly.'''
         self.update_time = 0
         
+        
+        '''Only when two nodes are both acive under the same article they know each other.'''
         self.all_active_nodes = {} #dictionary, key:node
         
         self.peaks = {} #article: list of keys
@@ -130,7 +154,7 @@ class Groups(object):
         No need for grouping the peaks
         '''
         
-    def update(self, key, node, article):
+    def __update(self, key, node, article):
         '''
         key_node_pairs: {key: node}
         node.__group() returns sorted array-like of indexes this node belong to. -1 if there is no such index.
@@ -156,14 +180,14 @@ class Groups(object):
                 del G[index]
         
         
-    def update_peaks(self):
+    def __update_peaks(self):
         in_use = self.articles_collector.active_articles
         group_peaks = np.array([])
         group_values = np.array([])
         articles_index = []
         
         for article in self.groups and article in in_use:
-            mid_group_peaks, mid_group_values = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
+            mid_group_peaks, mid_group_values = NodesUtil.__peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
             
             for index in range(len(mid_group_peaks)):
                 group_peaks = np.append(group_peaks, mid_group_peaks[index])
@@ -207,13 +231,13 @@ class Groups(object):
         
         
 class Node(object):
-    def __init__(self, key, click, article, groups):
+    def __init__(self, key, groups):
         '''
         groups, Groups object
         '''
         
         self.key = key
-        self.groups = groups
+        self.groups_object = groups #Gropus object
         self.counts = {}#dictionary, article: number
         
         
@@ -236,11 +260,13 @@ class Node(object):
         self.rho = 0.9 #deflator coefficient
         self.q = 0.8
         self.k = 1.5
+        self.__timer = 100 # for groups to update
+        self.counter = 0 # for groups to update
         
         '''self.groups will be useless after joining the party, article: set of groups'''
         self.groups = {}
         
-        self.distant_sets = [] #list of lists
+        self.distant_sets = [] #list of sets
 
         self.reachable_set = set()#keys are saved here as a set
         self.reachable_list = []#nodes are saved here as a list
@@ -248,15 +274,12 @@ class Node(object):
         
         for i in range(self.d):
             self.distant_sets.append(set())
-        '''
-        for i in range(self.d):
-            self.distant_lists.append(np.array([]))
-        '''
         
-    def update(self, reward, article, groups):
+        
+    def update(self, reward, article):
         '''
         reward: binary number
-        groups: Groups object 
+        
         '''
         if not self.counts[article]:
             self.counts[article] = 1
@@ -273,36 +296,40 @@ class Node(object):
             
         if not self.party_yet[article] and self.counts[article] >= 5 and self.clicks[article]:
             self.party_yet[article] = True
-            self.__join_the_party(groups, article)
+            self.__join_the_party(article)
         
         
-    def __join_the_party(self, current_groups, article):
+    def __join_the_party(self, article):
         'Count the distants and groups, and then update current groups object'
-        groups = current_groups.get_groups[article] #list of numpy array
-        nodes = current_groups.all_nodes #dictionary, key:node
+        groups = self.groups_object.get_groups[article] #list of numpy array
+        nodes = self.groups_object.all_nodes #dictionary, key:node
         
         self.groups[article] = set()
 
-        for group in groups:
+        for index, group in enumerate(groups):
             for key in group:
-                if key in self.reachable_set:
-                    self.groups[article].add(group)
+                if key in self.reachable_set:#######Reuse the information which was collected for other articles.
+                    self.groups[article].add(index)######
                 else:
-                    d = NodesUtil.distant(key, self.key)
+                    d = NodesUtil.__distant(key, self.key)
                     if d <= self.d:
                         target_node = nodes[key]
                         self.__distant_update(d, key, target_node)# added in self
                         target_node.__distant_update(d, self.key, target_node)# adding in theirs
-                       
                         
-                        self.groups[article].add(group)
+                        
+                        self.groups[article].add(index)
                     
                     
         if len(self.groups[article]) == 0:
             self.groups[article] = -1
      
-        current_groups.update(self.key, self, article)
+        self.groups_object.__update(self.key, self, article)
+        self.counter += 1
         
+        if self.counter >= self.__timer:
+            self.counter = 0
+            self.groups_object.__update_peaks()
     
     def __group(self, article):
         return list(self.groups[article]).sort()#list-like
@@ -313,7 +340,7 @@ class Node(object):
         self.reachable_list.append(node)
     
     
-    def value(self, article, current_nodes):
+    def __value(self, article, current_nodes):
         '''
         current_nodes: set of keys
         '''
@@ -338,15 +365,15 @@ class Node(object):
         '''
         return the recommended article(string) and the extra_bonus(could be 0)
         '''
-        if self.groups.get_update_time > self.update_time:
-            self.update_time = self.groups.get_update_time
-            current_recommended_articles = self.groups.get_peaks.keys()
+        if self.groups_object.get_update_time > self.update_time:
+            self.update_time = self.groups_object.get_update_time
+            current_recommended_articles = self.groups_object.get_peaks.keys()
             current_recommended_articles = current_recommended_articles - self.recommended
             current_recommended_articles = current_recommended_articles - self.recommending
             
             for article in current_recommended_articles:
-                for peak in self.groups.get_peaks[article]:#peak is key, key is a string
-                    if NodesUtil.distant(peak, self.key) <= self.d:
+                for peak in self.groups_object.get_peaks[article]:#peak is key, key is a string
+                    if NodesUtil.__distant(peak, self.key) <= self.d:
                         self.recommending.add(article)
        
        if self.recommending:
@@ -402,7 +429,7 @@ class NodesUtil(object):
         return self.groups.all_nodes
         
     @staticmethod
-    def distant(key1, key2):
+    def __distant(key1, key2):
         key1 = np.array([int(i) for i in list(key1) if i != '\n'])
         key2 = np.array([int(i) for i in list(key2) if i != '\n'])
         
@@ -411,10 +438,12 @@ class NodesUtil(object):
     
     
     @staticmethod
-    def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article):
+    def __peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article):
         '''
         return a list of raw peaks and a list of raw peak values.
         
+        Not all nodes in dic_of_all_active_nodes know each other. But it is true
+        when it's with respect to the same article
         '''
         
         
@@ -425,7 +454,7 @@ class NodesUtil(object):
         group_values = []
         
         
-        for index in list_of_arrays_of_keys:
+        for index in range(len(list_of_arrays_of_keys)):
             list_ = list_of_arrays_of_keys[index]
             mid_ = set()
             length = len(list_)
@@ -436,22 +465,24 @@ class NodesUtil(object):
             
             '''Saving the subset nodes in case we use it many times'''
             subset_nodes = {}
-            current_nodes = set()
+            current_nodes_set = set()
             record_nodes = set()
-            for key in list_:
+            for key in list_:     #key is string
                 mid_ = active_nodes[key]
                 subset_nodes.update(key, mid_)
-                current_nodes.add(key)
+                current_nodes_set.add(key)
                 record_nodes.add(mid_)
                 
-            while current_nodes:
+                
+            while current_nodes_set:
                 
                 values_dic = {}
                 
-                for key in current_nodes:
-                    mid_ = subset_nodes[key].value(article, current_nodes)
-                    values_dic.update(key, mid_)
-                    average_value += mid_
+                for key in list_:
+                    if key in current_nodes_set:
+                        mid_ = subset_nodes[key].__value(article, current_nodes_set)
+                        values_dic.update(key, mid_)
+                        average_value += mid_
                 
                 argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
                 
@@ -462,7 +493,7 @@ class NodesUtil(object):
                 mid_.update(mid_node.neighbors)
                 mid_.add(argmax_key)
                 
-                current_nodes = current_nodes - mid_
+                current_nodes_set = current_nodes_set - mid_
             
             
 
@@ -492,7 +523,7 @@ class NodesUtil(object):
         
         for index in range(length):
             mid_ = path_of_nodes[index]
-            value += mid_.value(article, subset_)
+            value += mid_.__value(article, subset_)
             subset_ = subset_ - mid_.neighbors  
             
         
@@ -525,7 +556,7 @@ class NodesUtil(object):
         trim_path_of_nodes = np.array(path_of_nodes)[bool_vector]   
         trim_path_of_keys = np.array(path_of_keys)[bool_vector]
         
-        return [trim_path_of_nodes, trim_path_of_keys]#[list, list]
+        return [trim_path_of_nodes, trim_path_of_keys]  #[list, list]
         
     
     
