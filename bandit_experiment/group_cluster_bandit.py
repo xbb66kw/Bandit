@@ -372,12 +372,12 @@ class Node(object):
                
            extra_bonus = 0.0
            values = np.array([])
-           keys = []
-           for key in self.counts.keys():
-               values = np.append(values, self.clicks[key] / self.counts[key] + self.alpha * np.sqrt(np.log(self.counts[key])/(self.counts[key]+1)))
-               keys.append(key)
+           articles = []
+           for article in self.counts.keys():
+               values = np.append(values, self.clicks[article] / self.counts[article] + self.alpha * np.sqrt(np.log(self.counts[article])/(self.counts[article]+1)))
+               articles.append(article)
            
-           return keys[np.argmax(values)], extra_bonus
+           return articles[np.argmax(values)], extra_bonus
            
            
     @property
