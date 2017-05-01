@@ -3,6 +3,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+import random 
 
 import operator#for argmax dictionary
 
@@ -93,7 +94,7 @@ class ArticlesCollector(object):
         self.active_articles = set()
     
     def update(self, extra, delete): 
-        self.active_articles = self.active_articles.difference(delete)
+        self.active_articles = self.active_articles - delete
         self.active_articles = self.active_articles.union(extra)
         
     @property
@@ -105,19 +106,29 @@ class ArticlesCollector(object):
         
         
         
+        
+        
+        
+        
 class Groups(object):
     def __init__(self, articles_collector):
         self.articles_collector = articles_collector# To handle the articles appering event
         
         self.groups = {} #dictionary of list of numpy array, article:array-like keys
+        '''
+        Used for computing the peaks
+        '''
         
-        
-        
+        '''Node reads this and scan through the updated peaks accordingly.'''
+        self.update_time = 0
         
         self.all_active_nodes = {} #dictionary, key:node
         
-        self.peaks = {} #article: lists of keys
-        
+        self.peaks = {} #article: list of keys
+        '''
+        Used for prediction when the upcoming node is unknown for articles
+        No need for grouping the peaks
+        '''
         
     def update(self, key, node, article):
         '''
@@ -147,12 +158,39 @@ class Groups(object):
         
     def update_peaks(self):
         in_use = self.articles_collector.active_articles
+        group_peaks = np.array([])
+        group_values = np.array([])
+        articles_index = []
         
         for article in self.groups and article in in_use:
-            self.peaks[article] = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article, self) #return a list of sets
-            '''working'''
+            mid_group_peaks, mid_group_values = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
+            
+            for index in range(len(mid_group_peaks)):
+                group_peaks = np.append(group_peaks, mid_group_peaks[index])
+                group_values = np.append(group_values, mid_group_values[index])
+                articles_index.append(article) #article is a string
+                
+                
+        '''Find the k-sigma high peaks and return them as group_peaks'''
+        threshold = self.k * np.std(group_values) + np.mean(group_values)
+        subset = group_values >= threshold
+        
+        
+        self.peaks = {}#refresh
+        
+        for index in range(len(articles_index)):
+            if subset[index]:
+                article = articles_index[index]
+                self.peaks[article].append(group_peaks[index])
+                
+        self.update_time += 1
+            
+        #inform the active nodes the updating info.
+        #self.notify_active_nodes()
     
-    
+    @property
+    def get_update_time(self):
+        return self.update_time
     
     @property
     def get_peaks(self):
@@ -169,12 +207,26 @@ class Groups(object):
         
         
 class Node(object):
-    def __init__(self, key, click, article):
+    def __init__(self, key, click, article, groups):
+        '''
+        groups, Groups object
+        '''
+        
         self.key = key
+        self.groups = groups
         self.counts = {}#dictionary, article: number
         
         
         self.clicks = {}#dictionary, article: number
+        
+        '''for updating sacnning'''
+        self.update_time = 0
+        
+        '''working'''
+        self.recommended = set() #set of article string, recording all recommended articles
+        self.recommending = set() #set of article string, recording all recommending articles
+        
+        
         
         
         self.party_yet = {}
@@ -261,51 +313,79 @@ class Node(object):
         self.reachable_list.append(node)
     
     
-    def value(self, article, current_groups):
+    def value(self, article, current_nodes):
         '''
-        current_groups: dictonary, key:node
+        current_nodes: set of keys
         '''
         values = np.array([])
         for node in self.reachable_list:
-            values = np.append(values, append(node.average(article)))
+            if node.key in current_nodes: 
+                values = np.append(values, append(node.average(article)))
             
         values = np.append(values, self.average(article))
         
         length = len(values)
         
-        return np.sort(values)[np.floor((1 - self.q) * length)] * np.log(length+1)
-        
-        '''
-        'wrong coding but will be useful in other case'
-        defactor = 0
-        values = []
-        for index in range(self.d):
-            values.append(0)
-            
-        for index in self.distant_sets:
-            clicks = 0
-            counts = 0
-            for key in self.distant_sets[index]:
-                node = current_groups[key]
-                clicks += node.clicks(article)
-                counts += node.counts(article)
-            if counts:
-                values[index] = clicks / counts
-                
-        mid_ = 0
-        vector = 0
-        for index in values:
-            if values[index]:
-                mid_ += np.power(self.rho, index)
-                vector += np.power(self.rho, index) * values[index]
-        '''
-        
+        return np.sort(values)[np.floor(self.q * length)] * np.log(length+1)
         
         
     
+    
+    
+    
+    '''working'''
+    def recommend(self, articles_collector):
+        '''
+        return the recommended article(string) and the extra_bonus(could be 0)
+        '''
+        if self.groups.get_update_time > self.update_time:
+            self.update_time = self.groups.get_update_time
+            current_recommended_articles = self.groups.get_peaks.keys()
+            current_recommended_articles = current_recommended_articles - self.recommended
+            current_recommended_articles = current_recommended_articles - self.recommending
+            
+            for article in current_recommended_articles:
+                for peak in self.groups.get_peaks[article]:#peak is key, key is a string
+                    if NodesUtil.distant(peak, self.key) <= self.d:
+                        self.recommending.add(article)
+       
+       if self.recommending:
+           extra_bonus = 1.5
+           
+           choice = random.sample(self.recommending, 1)[0]
+           self.recommending.remove(choice)
+           
+           return choice, extra_bonus
+               
+       else:
+           '''updating all article indexes'''
+           
+           current_articles_set = self.counts.keys()#set of articles(string)
+           extra_articles = articles_collector.active_articles - current_articles_set
+           delete_articles = current_articles_set - articles_collector.active_articles
+           for article in extra_articles:    
+               self.counts[article] = 0
+               self.clicks[article] = 0
+           for article in delete_articles:
+               del self.counts[article]
+               del self.clicks[article]
+               
+           extra_bonus = 0.0
+           values = np.array([])
+           keys = []
+           for key in self.counts.keys():
+               values = np.append(values, self.clicks[key] / self.counts[key] + self.alpha * np.sqrt(np.log(self.counts[key])/(self.counts[key]+1)))
+               keys.append(key)
+           
+           return keys[np.argmax(values)], extra_bonus
+           
+           
     @property
     def neighbors(self):
         return self.reachable_set
+    @property
+    def key(self):
+        return self.key
     
     def clicks(self, article):
         return self.clicks[article]
@@ -329,24 +409,19 @@ class NodesUtil(object):
         return np.sum(np.power((key1 - key2), 2))
     
     
-    '''working'''
+    
     @staticmethod
-    def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article, current_groups):
-        '''return a list of lists of peaks'''
+    def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article):
         '''
-        sets_of_nodes_in_groups = []
-        for index in list_of_keys:
-            mid_ = set()
-            [mid_.add(dic_of_all_active_nodes[key]) for key in list_of_keys[index]]
-            
-            sets_of_nodes_in_groups.append(mid_)
-        pass
+        return a list of raw peaks and a list of raw peak values.
+        
         '''
+        
         
         active_nodes = dic_of_all_active_nodes
         
         
-        group_peaks = []
+        group_peaks = []'''keys'''
         group_values = []
         
         
@@ -357,48 +432,102 @@ class NodesUtil(object):
             
             temp_path_keys = []
             temp_path_nodes = []
+            total_value = 0
             
+            '''Saving the subset nodes in case we use it many times'''
             subset_nodes = {}
+            current_nodes = set()
+            record_nodes = set()
             for key in list_:
-                subset_nodes.update(key, active_nodes[key])
+                mid_ = active_nodes[key]
+                subset_nodes.update(key, mid_)
+                current_nodes.add(key)
+                record_nodes.add(mid_)
                 
-            while len(mid_) < length:
+            while current_nodes:
                 
                 values_dic = {}
                 
-                for key in list_:
-                    if not key in mid_:
-                        values_dic.update(key, subset_nodes[key].value(article, current_groups))
-                
+                for key in current_nodes:
+                    mid_ = subset_nodes[key].value(article, current_nodes)
+                    values_dic.update(key, mid_)
+                    average_value += mid_
                 
                 argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
                 
-                mid_node = subset_nodes[argmax_key]#don't need to loo-up twice
+                mid_node = subset_nodes[argmax_key]#don't need to look-up twice
                 temp_path_keys.append(argmax_key)
                 temp_path_nodes.append(mid_node)
+                
                 mid_.update(mid_node.neighbors)
+                mid_.add(argmax_key)
+                
+                current_nodes = current_nodes - mid_
             
             
+
+            resulted_path_nodes, resulted_path_keys = NodesUtil.__path_trim(temp_path_nodes, temp_path_keys, record_nodes, article, total_value/length)
             
             
-            
-            group_values.append(NodesUtils.__path_value(temp_path_nodes, subset_nodes))
-            group_peaks.append(temp_path_keys)
+            group_values.append(NodesUtils.__path_value(resulted_path_nodes, record_nodes, article))
+            group_peaks.append(resulted_path_keys)
         
         
-        '''Find the k-sigma high peaks and return them as group_peaks'''
-        threshold = self.k * np.std(group_values) + np.mean(group_values)
-        subset = [index for index in range(len(group_values)) if group_values[index] >= threshold]
-        return [group_peaks[index] for index in subset]
         
-    '''working'''
+        
+        return group_values, group_peaks
+        
+        
+        
+ 
     @staticmethod
-    def __path_value(self, path_of_nodes, subset_nodes):
+    def __path_value(path_of_nodes, subset_nodes, article):
         '''
-        return computed value
+        subset_nodes, set of nodes
+        path_of_nodes, list of nodes
         '''
+        value = 0
+        subset_ = subset_nodes
+        length = len(path_of_nodes)
         
-        pass
+        for index in range(length):
+            mid_ = path_of_nodes[index]
+            value += mid_.value(article, subset_)
+            subset_ = subset_ - mid_.neighbors  
+            
+        
+        return value
+  
+  
+    @staticmethod
+    def __path_trim(path_of_nodes, path_of_keys, subset_nodes, article, average_value):
+        '''
+        article, string
+        path_of_nodes, list of nodes
+        path_of_keys, list of keys
+        '''
+        subset_ = subset_nodes
+        
+        full_value = NodesUtil.__path_value(path_of_nodes, subset_, article)
+        
+        values = []
+        
+        
+        length = len(path_of_nodes)
+
+        idx = np.arange(1, length)\
+            - np.tri(length, length - 1, k=-1, dtype=bool)
+            
+        for index in range(length):
+            values.append(NodesUtil.__path_value(np.array(path_of_nodes)[idx[index,:]], subset_, article))
+        
+        bool_vector = np.array(values) + average_value <= full_value
+        trim_path_of_nodes = np.array(path_of_nodes)[bool_vector]   
+        trim_path_of_keys = np.array(path_of_keys)[bool_vector]
+        
+        return [trim_path_of_nodes, trim_path_of_keys]#[list, list]
+        
+    
     
     
 def main():
