@@ -12,8 +12,8 @@ import operator#for argmax dictionary
 class DataReader(object):
     def __init__(self):
         
-        self.articles_old = []
-        self.articles_new = []
+        self.articles_old = set()
+        self.articles_new = set()
         self.line = None
         
         
@@ -33,15 +33,15 @@ class DataReader(object):
         '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111016.gz']
         
         
-        self. T = 5
+        self. T = 0
         self.fin = gzip.open(self.files_list[self.T],'r')
 
     def come(self):
         '''
         extra, delete, key are string
         '''
-        extra = None
-        delete = None
+        extra = set()
+        delete = set()
         click = 0
         
         self.line = self.fin.readline()
@@ -61,10 +61,14 @@ class DataReader(object):
         
         article = int(matches.group(1))
         click = int(matches.group(2))
-        covariates = np.zeros(136)
-
+        covariates = np.zeros(136).astype(int)
+        
         covariates[[int(elem) - 1 for elem in matches.group(3).split(' ') if elem != '']] = 1
-        key = np.random.normal(0,1)
+        key = ''.join(map(str, covariates))
+        
+        
+        #print(key in BB, '68')
+        
         ####guest
         mab = False
         if sum(covariates) == 1:
@@ -74,31 +78,29 @@ class DataReader(object):
         
         finder = re.findall(r'\|id-(\d+)', matches.group(4))
         
-        self.articles_new = [int(result) for result in finder]
+        self.articles_new = set([int(result) for result in finder])
         
-        
+
         
         if self.articles_new != self.articles_old:
-            extra = np.setdiff1d(self.articles_new, self.articles_old)
-            delete = np.setdiff1d(self.articles_old, self.articles_new)
-            
-            
+            extra = self.articles_new - self.articles_old
+            delete = self.articles_old - self.articles_new
+            #print(self.articles_new, extra, '85')  
+        
+        #print(self.articles_new, extra, '87')                
         self.articles_old = self.articles_new
         
 
         return {'covariates':covariates, 'article':article, 'click':click, 'extra':extra, 'delete':delete, 'mab':mab, 'key':key}
 
-    def end(self):
-        self.fin.close()
-    
-    def update_arms(self):
-        pass
 
-        
         
         
 class Groups(object):
     def __init__(self, articles_collector):
+        self.all_nodes_hitting_record = {}####TETS#######
+        
+        
         self.articles_collector = articles_collector# To handle the articles appering event
         
         self.groups = {} #dictionary of list of numpy array, article:array-like keys
@@ -118,34 +120,41 @@ class Groups(object):
         Used for prediction when the upcoming node is unknown for articles
         No need for grouping the peaks
         '''
+
+
+        self.k = 0.05
         
-    def __update(self, key, node, article):
+        
+        
+    def update(self, key, node, article):
         '''
         key_node_pairs: {key: node}
         node.__group() returns sorted array-like of indexes this node belong to. -1 if there is no such index.
         
         '''
-        self.all_active_nodes.update(key, node)
+        self.all_active_nodes.update({key: node})
         
         if not self.groups[article]:
             self.groups[article] = []
-        G = self.groups[article]
+        #self.groups[article]
         
         
-        if node.__group(article)[0] == -1:
-            G = np.append(G, np.array([key]))
-        elif len(node.__group(article)) == 1:
-            G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], key)
+        if node.group(article)[0] == -1:
+            self.groups[article].append([key])
+        elif len(node.group(article)) == 1:
+            self.groups[article][node.group(article)[0]].append(key)
         else:
-            G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], key) # Add the key first.
+            self.groups[article][node.group(article)[0]].append(key) # Add the key first.
             
-            for index in range(len(node.__group(article)[1:])):
-                G[node.__group(article)[0]] = np.append(G[node.__group(article)[0]], G[index])
-            for index in range(len(node.__group(article)[1:])):
-                del G[index]
+            for index in range(len(node.group(article)[1:])):
+                self.groups[article][node.group(article)[0]].append(self.groups[article][index])
+            for index in range(len(node.group(article)[1:])):
+                del self.groups[article][index]
         
-    
-    def __update_peaks(self):
+        
+        
+        
+    def update_peaks(self):
         in_use = self.articles_collector.active_articles
         group_peaks = np.array([])
         group_values = np.array([])
@@ -155,29 +164,53 @@ class Groups(object):
         
         for article in self.groups:  #article will be key(string) 
             if article in in_use:
-                mid_group_peaks, mid_group_values = NodesUtil.__peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
-            
-            for index in range(len(mid_group_peaks)):
-                group_peaks = np.append(group_peaks, mid_group_peaks[index])
-                group_values = np.append(group_values, mid_group_values[index])
-                articles_index.append(article) #article is a string
+                mid_group_values, mid_group_peaks = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
                 
+                #print(mid_group_peaks, mid_group_values, len(mid_group_peaks), 'mid_group_peaks', '166')
                 
+                for index in range(len(mid_group_peaks)):
+                    group_peaks = np.append(group_peaks, mid_group_peaks[index])
+                    group_values = np.append(group_values, mid_group_values[index])
+                    articles_index.append(article) #article is a string
+                    print(len(articles_index), len(group_peaks), '174')
+                    
+        #print(group_values, '175')
+        
         '''Find the k-sigma high peaks and return them as group_peaks'''
         threshold = self.k * np.std(group_values) + np.mean(group_values)
         subset = group_values >= threshold
         
         
-        self.peaks = {}#refresh
         
+        for article in self.peaks:#refresh
+            self.peaks[article] = []
+            
         for index in range(len(articles_index)):
             if subset[index]:
+                print(articles_index, index, len(articles_index), len(group_peaks), '190')
                 article = articles_index[index]
                 self.peaks[article].append(group_peaks[index])
                 
         self.update_time += 1
         return self.peaks
+        
     
+    def articles_update(self, articles_collector):
+        '''updating the articles for self.groups and self.peaks'''    
+        
+        current_articles_set = self.groups.keys()#set of articles(string)
+        extra_articles = articles_collector.active_articles - current_articles_set
+        delete_articles = current_articles_set - articles_collector.active_articles
+        
+        for article in extra_articles:            
+            self.groups[article] = []
+            self.peaks[article] = []   
+        for article in delete_articles:
+            del self.groups[article]
+            del self.peaks[article]
+        
+        
+
     @property
     def get_update_time(self):
         return self.update_time
@@ -202,7 +235,7 @@ class Node(object):
         groups, Groups object
         '''
         self.key_integers = covariates 
-        self.key = key
+        self.__key = key
         self.groups_object = groups #Gropus object
         self.counts = {}  #dictionary, article: number
         
@@ -216,17 +249,17 @@ class Node(object):
         self.recommended = set() #set of article string, recording all recommended articles
         self.recommending = set() #set of article string, recording all recommending articles
         
-        
+        self.__decided = False #Before the node receive any network recommendation or become a peak, it takes advice from the joint MAB 
         
         
         self.party_yet = {}
         
-        
+        self.alpha = 0.5
         self.d = 4 #Basic distant parameter
         self.rho = 0.9 #deflator coefficient
         self.q = 0.8
         self.k = 1.5
-        self.__timer = 100 # for groups to update
+        self.__timer = 1 # for groups to update
         self.counter = 0 # for groups to update
         
         '''self.groups will be useless after joining the party, article: set of groups'''
@@ -241,32 +274,36 @@ class Node(object):
         for i in range(self.d):
             self.distant_sets.append(set())
         
-
+    
     def update(self, reward, article):
         '''
         reward: binary number
         
         '''
-        if not self.counts[article]:
-            self.counts[article] = 1
-        else:
-            self.counts[article] += 1
         
-        if not self.clicks[article]:
-            self.clicks[article] = reward
-        else:
-            self.clicks[article] += reward
+        '''articles updating has already been done in the recommend step'''
+        self.counts[article] += 1
+        #print(self.clicks, reward, '282')
+        self.clicks[article] += reward
         
-        if not self.party_yet[article]:
-            self.party_yet[article] = False
+        
+        ####TESRT########
+        self.groups_object.all_nodes_hitting_record[self.__key] += 1
+        
+        #print(len([key for key in self.groups_object.all_nodes_hitting_record if self.groups_object.all_nodes_hitting_record[key] > 2]), '278')
+        #print([ self.groups_object.all_nodes_hitting_record[key] for key in self.groups_object.all_nodes_hitting_record if self.groups_object.all_nodes_hitting_record[key] > 2], 'click at this article:', self.clicks[article], '279')
+        #print(self.party_yet[article], self.counts, self.clicks[article], '254')
+        if not self.party_yet[article] and self.counts[article] >= 1 and self.clicks[article]:
+            self.__decided = True
             
-        if not self.party_yet[article] and self.counts[article] >= 5 and self.clicks[article]:
             self.party_yet[article] = True
             self.__join_the_party(article)
-        
-        
+            print(self.groups_object.peaks, '298')
+    
     def __join_the_party(self, article):
         'Count the distants and groups, and then update current groups object'
+        self.groups_object.articles_update(self.groups_object.articles_collector)
+        
         groups = self.groups_object.get_groups[article] #list of numpy array
         nodes = self.groups_object.all_nodes #dictionary, key:node
         
@@ -279,50 +316,54 @@ class Node(object):
                 else:
                     target_node = nodes[key]
                     
-                    d = NodesUtil.__distant(target_node.key_integers, self.key_integers)
+                    d = NodesUtil.distant(target_node.key_integers, self.key_integers)
                     if d <= self.d:    
-                        self.__distant_update(d, key, target_node)# added in self
-                        target_node.__distant_update(d, self.key, target_node)# adding in theirs
+                        self.distant_update(d, key, target_node)# added in self
+                        target_node.distant_update(d, self.__key, target_node)# adding in theirs
                         
                         
                         self.groups[article].add(index)
                     
                 
         if len(self.groups[article]) == 0:
-            self.groups[article] = -1
+            self.groups[article] = [-1]
         
-        self.groups_object.__update(self.key, self, article)
+        self.groups_object.update(self.__key, self, article)
         self.counter += 1
+        
+        print(self.counter, '318')
+        
+        
         
         if self.counter >= self.__timer:
             self.counter = 0
-            self.groups_object.__update_peaks()
-
-    def __group(self, article):
-        return list(self.groups[article]).sort()#list-like
+            self.groups_object.update_peaks()
     
-    def __distant_update(self, distant, key, node):
+    def group(self, article):
+        return np.sort(list(self.groups[article]))#list-like
+    
+    def distant_update(self, distant, key, node):
         self.distant_sets[(distant-1)].add(key)
         self.reachable_set.add(key)
         self.reachable_list.append(node)
     
     
-    def __value(self, article, current_nodes):
+    def value(self, article, current_nodes):
         '''
         current_nodes: set of keys
         '''
         values = np.array([])
         for node in self.reachable_list:
             if node.key in current_nodes: 
-                values = np.append(values, append(node.average(article)))
+                values = np.append(values, node.average(article))
             
         values = np.append(values, self.average(article))
         
         length = len(values)
+
+        return np.sort(values)[np.floor(self.q * length).astype(int)] * np.log(length+1)
         
-        return np.sort(values)[np.floor(self.q * length)] * np.log(length+1)
-        
-        
+     
     
     
     
@@ -339,10 +380,12 @@ class Node(object):
             
             for article in current_recommended_articles:
                 for peak in self.groups_object.get_peaks[article]:#peak is key, key is a string
-                    if NodesUtil.__distant(self.groups_object.all_active_nodes[peak].key_integers, self.key_integers) <= self.d:
+                    if NodesUtil.distant(self.groups_object.all_active_nodes[peak].key_integers, self.key_integers) <= self.d:
                         self.recommending.add(article)
         
         if self.recommending:
+            self.__decided = True
+            
             extra_bonus = 1.5
             
             choice = random.sample(self.recommending, 1)[0]
@@ -351,43 +394,72 @@ class Node(object):
             return choice, extra_bonus
            
         else:
-           '''updating all article indexes'''
-           
-           current_articles_set = self.counts.keys()#set of articles(string)
-           extra_articles = articles_collector.active_articles - current_articles_set
-           delete_articles = current_articles_set - articles_collector.active_articles
-           
-           for article in extra_articles:    
-               self.counts[article] = 0
-               self.clicks[article] = 0
-           for article in delete_articles:
-               del self.counts[article]
-               del self.clicks[article]
-               
-           extra_bonus = 0.0
-           values = np.array([])
-           articles = []
-           for article in self.counts.keys():
-               values = np.append(values, self.clicks[article] / self.counts[article] + self.alpha * np.sqrt(np.log(self.counts[article])/(self.counts[article]+1)))
-               articles.append(article)
-           
-           return articles[np.argmax(values)], extra_bonus
-           
-           
+            '''updating all article indexes'''
+            
+            current_articles_set = self.counts.keys()#set of articles(string)
+            extra_articles = articles_collector.active_articles - current_articles_set
+            delete_articles = current_articles_set - articles_collector.active_articles
+            #print(self.__key, self.counts, current_articles_set, '350')
+            for article in extra_articles:
+                
+                self.counts[article] = 0
+                self.clicks[article] = 0
+                self.party_yet[article] = False
+            for article in delete_articles:
+                del self.counts[article]
+                del self.clicks[article]
+                del self.party_yet[article]
+        
+            extra_bonus = 0.0
+            values = np.array([])
+            articles = []
+            for article in self.counts.keys():
+                values = np.append(values, self.clicks[article] / (1 + self.counts[article]) + self.alpha * np.sqrt(1/(self.counts[article]+1)))
+                articles.append(article)
+        
+            #print(current_articles_set, articles_collector.active_articles, '369')
+            
+            return articles[np.argmax(values)], extra_bonus
+    
+    '''While the node hasnt made its own decision, it still require arms updating'''
+    def articles_update(self, articles_collector):
+        '''updating all article indexes'''
+        
+        current_articles_set = self.counts.keys()#set of articles(string)
+        extra_articles = articles_collector.active_articles - current_articles_set
+        delete_articles = current_articles_set - articles_collector.active_articles
+        #print(self.__key, self.counts, current_articles_set, '350')
+        for article in extra_articles:
+            
+            self.counts[article] = 0
+            self.clicks[article] = 0
+            self.party_yet[article] = False
+        for article in delete_articles:
+            del self.counts[article]
+            del self.clicks[article]
+            del self.party_yet[article]
+            
+    @property
+    def decided(self):
+        return self.__decided
+        
     @property
     def neighbors(self):
         return self.reachable_set
+        
     @property
     def key(self):
-        return self.key
+        return self.__key
     
     def clicks(self, article):
         return self.clicks[article]
     def counts(self, article):
         return self.counts[article]
     def average(self, article):
-        return self.clicks[article] / self.counts[article]
+        return self.clicks[article] / self.counts[article]       
     
+    
+
 class NodesUtil(object):
     def __init__(self, groups):
         self.groups = groups
@@ -396,13 +468,13 @@ class NodesUtil(object):
         return self.groups.all_nodes
         
     @staticmethod
-    def __distant(covariates1, covariates2):
+    def distant(covariates1, covariates2):
         return np.sum(np.power((covariates1 - covariates2), 2))
     
     
     
     @staticmethod
-    def __peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article):
+    def peaks(list_of_arrays_of_keys, dic_of_all_active_nodes, article):
         '''
         return a list of raw peaks and a list of raw peak values.
         
@@ -420,51 +492,59 @@ class NodesUtil(object):
         
         for index in range(len(list_of_arrays_of_keys)):
             list_ = list_of_arrays_of_keys[index]
-            mid_ = set()
+            
             length = len(list_)
             
             temp_path_keys = []
             temp_path_nodes = []
+            
+            '''compute the averate_value'''
             total_value = 0
+            round_ = 0
             
             '''Saving the subset nodes in case we use it many times'''
             subset_nodes = {}
             current_nodes_set = set()
             record_nodes = set()
-            for key in list_:     #key is string
-                mid_ = active_nodes[key]
-                subset_nodes.update(key, mid_)
-                current_nodes_set.add(key)
-                record_nodes.add(mid_)
+            for index, key in enumerate(list_):     #key is string
                 
+                mid_ = active_nodes[key]
+                subset_nodes.update({key:mid_})
+                current_nodes_set.add(key)
+                record_nodes.add(key)
+                
+                mid_3 = set()
                 
             while current_nodes_set:
                 
                 values_dic = {}
                 
+                
                 for key in list_:
                     if key in current_nodes_set:
-                        mid_ = subset_nodes[key].__value(article, current_nodes_set)
-                        values_dic.update(key, mid_)
-                        average_value += mid_
+                        mid_2 = subset_nodes[key].value(article, current_nodes_set)
+                        values_dic.update({key: mid_2})
+                        if round_ <= 0:
+                            total_value += mid_2
                 
-                argmax_key = max(values_dic.iteritems(), key=operator.itemgetter(1))[0]
+                argmax_key = max(values_dic, key=values_dic.get)
                 
                 mid_node = subset_nodes[argmax_key]#don't need to look-up twice
                 temp_path_keys.append(argmax_key)
                 temp_path_nodes.append(mid_node)
+
+                mid_3.update(mid_node.neighbors)
+                mid_3.add(argmax_key)
                 
-                mid_.update(mid_node.neighbors)
-                mid_.add(argmax_key)
+                current_nodes_set = current_nodes_set - mid_3
                 
-                current_nodes_set = current_nodes_set - mid_
-            
+                round_ += 1
             
         
             resulted_path_nodes, resulted_path_keys = NodesUtil.__path_trim(temp_path_nodes, temp_path_keys, record_nodes, article, total_value/length)
             
             
-            group_values.append(NodesUtils.__path_value(resulted_path_nodes, record_nodes, article))
+            group_values.append(NodesUtil.__path_value(resulted_path_nodes, record_nodes, article))
             group_peaks.append(resulted_path_keys)
         
         
@@ -487,10 +567,9 @@ class NodesUtil(object):
         
         for index in range(length):
             mid_ = path_of_nodes[index]
-            value += mid_.__value(article, subset_)
-            subset_ = subset_ - mid_.neighbors  
-            
-        
+            value += mid_.value(article, subset_)
+            subset_ = subset_ - mid_.neighbors.union([mid_])
+     
         return value
   
   
@@ -517,6 +596,9 @@ class NodesUtil(object):
             values.append(NodesUtil.__path_value(np.array(path_of_nodes)[idx[index,:]], subset_, article))
         
         bool_vector = np.array(values) + average_value <= full_value
+        
+        print(length, values, average_value, full_value, bool_vector, 'bool_vector', '600')
+        
         trim_path_of_nodes = np.array(path_of_nodes)[bool_vector]   
         trim_path_of_keys = np.array(path_of_keys)[bool_vector]
         
@@ -534,6 +616,9 @@ class Assigner(object):
         '''saving all nodes'''
         self.all_nodes = {}
         self.all_nodes_set = set()
+        
+        
+
         self.groups_object = groups_object
         
         
@@ -541,14 +626,21 @@ class Assigner(object):
         '''
         key is a string
         '''
-     
+        
         if key in self.all_nodes_set:
-            return self.all_nodes[key]
+            #print(len(self.all_nodes_set), '545')
+            return self.all_nodes[key], True
+            
         else:
+            #print(key, '545')
+            #print(len(self.all_nodes_set), '544')
             node = Node(key, covariates, self.groups_object)
             self.all_nodes[key] = node
+            
+            self.groups_object.all_nodes_hitting_record[key] = 0 ####TETS
+            
             self.all_nodes_set.add(key)
-            return node
+            return node, False
             
     
 
@@ -560,15 +652,15 @@ class ArticlesCollector(object):
     
     '''
     def __init__(self):
-        self.active_articles = set()
+        self.__active_articles = set()
     
     def update(self, extra, delete): 
-        self.active_articles = self.active_articles - delete
-        self.active_articles = self.active_articles.union(extra)
-        
+        self.__active_articles = self.__active_articles - delete
+        self.__active_articles = self.__active_articles.union(extra)
+
     @property
     def active_articles(self):
-        return self.active_articles
+        return self.__active_articles
         
      
     
@@ -579,32 +671,34 @@ class MAB(object):
     '''
     def __init__(self, articles_collector):
         self.articles_collector = articles_collector
-        
-        
-        
+    
         self.clicks = {}
         self.counts = {}
+        
+        
+        self.alpha = 0.5
+        
         
     def recommend(self):
         '''updating all article indexes'''
         
-        current_articles_set = self.counts.keys()#set of articles(string)
+        current_articles_set = self.counts.keys() #set of articles(string)
         extra_articles = self.articles_collector.active_articles - current_articles_set
         delete_articles = current_articles_set - self.articles_collector.active_articles
         
         for article in extra_articles:    
-           self.counts[article] = 0
-           self.clicks[article] = 0
+            self.counts[article] = 1
+            self.clicks[article] = 0
         for article in delete_articles:
-           del self.counts[article]
-           del self.clicks[article]
-           
+            del self.counts[article]
+            del self.clicks[article]
+        
         extra_bonus = 0.0
         values = np.array([])
         articles = []
         for article in self.counts.keys():
-           values = np.append(values, self.clicks[article] / self.counts[article] + self.alpha * np.sqrt(np.log(self.counts[article])/(self.counts[article]+1)))
-           articles.append(article)
+            values = np.append(values, self.clicks[article] / self.counts[article] + self.alpha * np.sqrt(1/(self.counts[article]+1)))
+            articles.append(article)
         
         return articles[np.argmax(values)], extra_bonus   
         
@@ -616,7 +710,8 @@ class MAB(object):
         self.counts[article] += 1
         self.clicks[article] += reward
         
-        
+        #if reward:#######
+        #    print(self.clicks, '709')
         
 
 class Agent(object):
@@ -650,6 +745,7 @@ class Agent(object):
         '''
         key = stuff['key']
         mab = stuff['mab']
+        covariates = stuff['covariates']
         
         if mab:
             self.mab_object.update(reward, self.last_action) #self.last_action is an article string
@@ -662,11 +758,22 @@ class Agent(object):
         '''
         extra_bonus only for updating, not for the final result
         '''
-        node = self.assigner(key, covariates)
+        node, used_node = self.assigner.assign(key, covariates)
+        
+        
+        if not node.decided:
+            node.update(reward, self.last_action)
+            
+            #self.mab_object.update(reward, self.last_action)
+            return 0
+        
         node.update(reward, self.last_action)
         
-        self.extra_bonus = 0
         
+        '''Reresh extra_bonus'''
+        self.extra_bonus = 0
+    
+    
     def recommend(self, stuff):
         '''
         receiving a key and decide self.last_acion and self.extra_bonus
@@ -675,52 +782,60 @@ class Agent(object):
         mab is a bool
         stuff, {'covariates':covariates, 'article':article, 'click':click, 'extra':extra, 'delete':delete, 'mab':mab, 'key':None}
         '''
+        
         key = stuff['key']
         mab = stuff['mab']
         covariates = stuff['covariates']
         
         if mab:
-            self.last_action, self.extra_bonus = self.mab_object.recommand() #self.last_action is a string
-
-            
+            self.last_action, self.extra_bonus = self.mab_object.recommend() #self.last_action is a string            
             return self.last_action
         
-        node = self.assigner(key, covariates)
         
-        self.last_action, self.extra_bonus = node.recommand(self.articles_collector)
+        node, used_node = self.assigner.assign(key, covariates)
         
+        if not node.decided:
+            self.last_action, self.extra_bonus = self.mab_object.recommend() #The node is not ready, still using mab object.
+            node.articles_update(self.articles_collector)
+            return self.last_action
+        
+        
+        
+        self.last_action, self.extra_bonus = node.recommend(self.articles_collector)        
         return self.last_action 
         
+
     def update_arms(self, stuff):
         self.articles_collector.update(stuff['extra'], stuff['delete'])
         
         
-        
-        
+
+
+
     
 class Environment(object):
    
-    def run(self, agents, data_reader, timestamp = 2000):
+    def run(self, agents, data_reader, timestamp = 10000):
         self.reward_curves = np.zeros((timestamp, len(agents)))
         self.timer = np.zeros(len(agents)).astype(int)
         self.agents = agents
         times = 0
         while np.min(self.timer) < timestamp:
             #Also in this step, arms will be refreshed
-            stuff = data.come()
+            stuff = data_reader.come()
 
             
             times += 1
             for i, agent in enumerate(agents):# agents can be [...]
                 
                 if int(np.sqrt(times)) == np.sqrt(times):
-                    print(np.sqrt(times), times, self.timer, '522')
+                    print(np.sqrt(times), times, self.timer, agent.acc_reward, '714')
                     
                 if self.timer[i] < timestamp:
                     
                     agent.update_arms(stuff)
                     
-                    agent.last_action = agent.recommand(stuff)
+                    agent.last_action = agent.recommend(stuff)
                     
                     if agent.last_action == stuff['article']:
                         reward = stuff['click']
@@ -734,8 +849,7 @@ class Environment(object):
         
     def plot(self, number_of_agents):
         if number_of_agents == 1:
-            #label_list = ['guestucb']
-            label_list = ['ogaucb']
+            label_list = ['Groups']
         elif number_of_agents == 2:
             label_list = ['guestucb', 'lin_ucb']
             label_list = ['guestucb', 'ucb1']
@@ -747,7 +861,7 @@ class Environment(object):
             
             collect[j], = plt.plot(self.reward_curves[:,j], label=label_list[j])
             mid_ = "/Users/apple/Desktop/bandit_experiment/bandit_modified" + str(j)
-            np.save(mid_, self.reward_curves[:,j])
+            #np.save(mid_, self.reward_curves[:,j])
             
         if number_of_agents == 1:
             plt.legend(handles=[collect[0]])
@@ -763,7 +877,17 @@ class Environment(object):
     
 def main():
     data_reader = DataReader()
-    print(data_reader.come())
-        
+    
+    
+    
+    AC = ArticlesCollector()
+    G = Groups(AC)
+    A = Assigner(G)
+    M = MAB(AC)
+    AG = Agent(G, M)
+    
+    E = Environment()
+    E.run([AG], data_reader)
+    E.plot(len([AG]))
 if __name__ == '__main__':
     main()
