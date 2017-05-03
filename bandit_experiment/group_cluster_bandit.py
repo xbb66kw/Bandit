@@ -33,7 +33,7 @@ class DataReader(object):
         '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111016.gz']
         
         
-        self. T = 0
+        self. T = 3
         self.fin = gzip.open(self.files_list[self.T],'r')
 
     def come(self):
@@ -147,7 +147,7 @@ class Groups(object):
             self.groups[article][node.group(article)[0]].append(key) # Add the key first.
             
             for index in range(len(node.group(article)[1:])):
-                self.groups[article][node.group(article)[0]].append(self.groups[article][index])
+                self.groups[article][node.group(article)[0]].extend(self.groups[article][index])##extend!
             for index in range(len(node.group(article)[1:])):
                 del self.groups[article][index]
         
@@ -166,15 +166,15 @@ class Groups(object):
             if article in in_use:
                 mid_group_values, mid_group_peaks = NodesUtil.peaks(self.groups[article], self.all_active_nodes, article) #return a list of keys
                 
-                #print(mid_group_peaks, mid_group_values, len(mid_group_peaks), 'mid_group_peaks', '166')
+                
                 
                 for index in range(len(mid_group_peaks)):
                     group_peaks = np.append(group_peaks, mid_group_peaks[index])
                     group_values = np.append(group_values, mid_group_values[index])
                     articles_index.append(article) #article is a string
-                    print(len(articles_index), len(group_peaks), '174')
                     
-        #print(group_values, '175')
+                    
+       
         
         '''Find the k-sigma high peaks and return them as group_peaks'''
         threshold = self.k * np.std(group_values) + np.mean(group_values)
@@ -182,16 +182,17 @@ class Groups(object):
         
         
         
-        for article in self.peaks:#refresh
+        for article in self.peaks:  #refresh
             self.peaks[article] = []
             
         for index in range(len(articles_index)):
             if subset[index]:
-                print(articles_index, index, len(articles_index), len(group_peaks), '190')
                 article = articles_index[index]
                 self.peaks[article].append(group_peaks[index])
                 
         self.update_time += 1
+        
+        print([len(self.peaks[key]) for key in self.peaks], np.sum([len(self.peaks[key]) for key in self.peaks]), '194')
         return self.peaks
         
     
@@ -283,22 +284,18 @@ class Node(object):
         
         '''articles updating has already been done in the recommend step'''
         self.counts[article] += 1
-        #print(self.clicks, reward, '282')
         self.clicks[article] += reward
         
         
         ####TESRT########
         self.groups_object.all_nodes_hitting_record[self.__key] += 1
         
-        #print(len([key for key in self.groups_object.all_nodes_hitting_record if self.groups_object.all_nodes_hitting_record[key] > 2]), '278')
-        #print([ self.groups_object.all_nodes_hitting_record[key] for key in self.groups_object.all_nodes_hitting_record if self.groups_object.all_nodes_hitting_record[key] > 2], 'click at this article:', self.clicks[article], '279')
-        #print(self.party_yet[article], self.counts, self.clicks[article], '254')
-        if not self.party_yet[article] and self.counts[article] >= 1 and self.clicks[article]:
+
+        if not self.party_yet[article] and self.counts[article] >= 2 and self.clicks[article]:
             self.__decided = True
             
             self.party_yet[article] = True
             self.__join_the_party(article)
-            print(self.groups_object.peaks, '298')
     
     def __join_the_party(self, article):
         'Count the distants and groups, and then update current groups object'
@@ -330,8 +327,6 @@ class Node(object):
         
         self.groups_object.update(self.__key, self, article)
         self.counter += 1
-        
-        print(self.counter, '318')
         
         
         
@@ -369,9 +364,28 @@ class Node(object):
     
     
     def recommend(self, articles_collector):
+        print('recommended by the node', '367')
         '''
         return the recommended article(string) and the extra_bonus(could be 0)
         '''
+        
+        '''updating all article indexes'''
+            
+        current_articles_set = self.counts.keys()#set of articles(string)
+        extra_articles = articles_collector.active_articles - current_articles_set
+        delete_articles = current_articles_set - articles_collector.active_articles
+        for article in extra_articles:
+            
+            self.counts[article] = 0
+            self.clicks[article] = 0
+            self.party_yet[article] = False
+        for article in delete_articles:
+            del self.counts[article]
+            del self.clicks[article]
+            del self.party_yet[article]
+        
+        
+        
         if self.groups_object.get_update_time > self.update_time:
             self.update_time = self.groups_object.get_update_time
             current_recommended_articles = self.groups_object.get_peaks.keys()
@@ -393,31 +407,14 @@ class Node(object):
             
             return choice, extra_bonus
            
-        else:
-            '''updating all article indexes'''
-            
-            current_articles_set = self.counts.keys()#set of articles(string)
-            extra_articles = articles_collector.active_articles - current_articles_set
-            delete_articles = current_articles_set - articles_collector.active_articles
-            #print(self.__key, self.counts, current_articles_set, '350')
-            for article in extra_articles:
-                
-                self.counts[article] = 0
-                self.clicks[article] = 0
-                self.party_yet[article] = False
-            for article in delete_articles:
-                del self.counts[article]
-                del self.clicks[article]
-                del self.party_yet[article]
-        
+        else:        
             extra_bonus = 0.0
             values = np.array([])
             articles = []
             for article in self.counts.keys():
                 values = np.append(values, self.clicks[article] / (1 + self.counts[article]) + self.alpha * np.sqrt(1/(self.counts[article]+1)))
                 articles.append(article)
-        
-            #print(current_articles_set, articles_collector.active_articles, '369')
+   
             
             return articles[np.argmax(values)], extra_bonus
     
@@ -428,9 +425,7 @@ class Node(object):
         current_articles_set = self.counts.keys()#set of articles(string)
         extra_articles = articles_collector.active_articles - current_articles_set
         delete_articles = current_articles_set - articles_collector.active_articles
-        #print(self.__key, self.counts, current_articles_set, '350')
-        for article in extra_articles:
-            
+        for article in extra_articles:           
             self.counts[article] = 0
             self.clicks[article] = 0
             self.party_yet[article] = False
@@ -507,10 +502,11 @@ class NodesUtil(object):
             current_nodes_set = set()
             record_nodes = set()
             for index, key in enumerate(list_):     #key is string
-                
+                #print(active_nodes, list_, key, '503')
                 mid_ = active_nodes[key]
                 subset_nodes.update({key:mid_})
                 current_nodes_set.add(key)
+                #print(key, record_nodes, list_, '507')
                 record_nodes.add(key)
                 
                 mid_3 = set()
@@ -544,7 +540,7 @@ class NodesUtil(object):
             resulted_path_nodes, resulted_path_keys = NodesUtil.__path_trim(temp_path_nodes, temp_path_keys, record_nodes, article, total_value/length)
             
             
-            group_values.append(NodesUtil.__path_value(resulted_path_nodes, record_nodes, article))
+            group_values.append(NodesUtil.__path_value(resulted_path_nodes, record_nodes, article)/len(resulted_path_keys))
             group_peaks.append(resulted_path_keys)
         
         
@@ -597,7 +593,13 @@ class NodesUtil(object):
         
         bool_vector = np.array(values) + average_value <= full_value
         
-        print(length, values, average_value, full_value, bool_vector, 'bool_vector', '600')
+        ####print(article, len(path_of_nodes), values, average_value, average_value, bool_vector, '591')
+        
+        '''Keep all elements. Sometimes bool_vector will be all False, this is 
+        probability because average_value consider all neighbors of a given 
+        nodes, path_value considers only diminishing nodes values '''
+        if not any(bool_vector):
+            bool_vector = np.array([not elem for elem in bool_vector])
         
         trim_path_of_nodes = np.array(path_of_nodes)[bool_vector]   
         trim_path_of_keys = np.array(path_of_keys)[bool_vector]
@@ -628,12 +630,9 @@ class Assigner(object):
         '''
         
         if key in self.all_nodes_set:
-            #print(len(self.all_nodes_set), '545')
             return self.all_nodes[key], True
             
         else:
-            #print(key, '545')
-            #print(len(self.all_nodes_set), '544')
             node = Node(key, covariates, self.groups_object)
             self.all_nodes[key] = node
             
@@ -709,9 +708,7 @@ class MAB(object):
         '''
         self.counts[article] += 1
         self.clicks[article] += reward
-        
-        #if reward:#######
-        #    print(self.clicks, '709')
+
         
 
 class Agent(object):
@@ -763,8 +760,6 @@ class Agent(object):
         
         if not node.decided:
             node.update(reward, self.last_action)
-            
-            #self.mab_object.update(reward, self.last_action)
             return 0
         
         node.update(reward, self.last_action)
@@ -795,10 +790,9 @@ class Agent(object):
         node, used_node = self.assigner.assign(key, covariates)
         
         if not node.decided:
-            self.last_action, self.extra_bonus = self.mab_object.recommend() #The node is not ready, still using mab object.
             node.articles_update(self.articles_collector)
+            self.last_action, self.extra_bonus = self.mab_object.recommend() #The node is not ready, still using mab object.
             return self.last_action
-        
         
         
         self.last_action, self.extra_bonus = node.recommend(self.articles_collector)        
@@ -815,7 +809,7 @@ class Agent(object):
     
 class Environment(object):
    
-    def run(self, agents, data_reader, timestamp = 10000):
+    def run(self, agents, data_reader, timestamp = 70000):
         self.reward_curves = np.zeros((timestamp, len(agents)))
         self.timer = np.zeros(len(agents)).astype(int)
         self.agents = agents
