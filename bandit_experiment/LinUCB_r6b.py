@@ -76,22 +76,23 @@ class LinUCB(object):
         
         
         
-        arms = list(self.Aa.keys())
-        x = np.array([covariates]).T
-        xT = x.T
+        arm_keys = list(self.Aa.keys())
+        x = covariates
         
-        tmp_AaI = [self.AaI[arm] for arm in arms]
+        results = []
         
-        tmp_theta = [self.theta[arm] for arm in arms]
+        for key in arm_keys:
+            results.append(np.dot(self.theta[key][None,:], x)[0,0]\
+                + self.alpha * np.sqrt(np.dot(x[None,:], self.AaI[key]).dot(x[:,None]))[0,0])
+        
+        max_ = np.argmax(reuslts)
         
         
+        self.last_action = arm_keys[max_]
         
-        max_ = np.argmax(np.dot(xT, tmp_theta)[0,:,:]
-            + self.alpha * np.sqrt(np.dot(np.dot(xT, tmp_AaI)[0,:,:], x)))
-        
-        self.last_action = arms[max_]
-        
-        return arms[max_], 0
+        return self.last_action, 0
+    
+
     
 
  
