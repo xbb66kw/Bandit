@@ -17,24 +17,11 @@ class DataReader(object):
         self.line = None
         
         
-        self.files_list = ['/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111003.gz', 
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111004.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111005.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111006.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111007.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111008.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111009.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111010.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111011.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111012.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111013.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111014.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111015.gz',
-        '/Users/apple/Desktop/bandit_experiment/Webscope_R6B/ydata-fp-td-clicks-v2_0.20111016.gz']
+        self.files_list = ['/Users/xbb/Desktop/bandit_experiment/r6b_18k.txt']
         
         
         self. T = 0
-        self.fin = gzip.open(self.files_list[self.T],'r')
+        self.fin = open(self.files_list[self.T],'r')
 
     def come(self):
         '''
@@ -46,14 +33,13 @@ class DataReader(object):
         
         self.line = self.fin.readline()
         
-        if not self.line:
-            print(self.T, '446')
+        if not self.line:            
             self.T += 1
             self.fin = gzip.open(self.files_list[self.T], 'r')
             self.line = self.fin.readline()
             'If self.T >= 13, we are running out of the data.'
         
-        cha = self.line.decode('utf-8')
+        cha = self.line
         
         
             
@@ -101,6 +87,8 @@ class Groups(object):
         self.all_nodes_hitting_record = {}####TETS#######
         
         
+        self.begin = False
+        
         self.articles_collector = articles_collector# To handle the articles appering event
         
         self.groups = {} #dictionary of list of numpy array, article:array-like keys
@@ -124,7 +112,7 @@ class Groups(object):
         '''For self.update_peaks'''
         self.counter = 0
 
-        self.k = 0.05
+        self.k = 0.5
         
         
         
@@ -193,7 +181,7 @@ class Groups(object):
                 self.peaks[article].append(group_peaks[index])
                 
         self.update_time += 1
-        
+        print(group_values, '193')
         print([len(self.peaks[key]) for key in self.peaks], np.sum([len(self.peaks[key]) for key in self.peaks]), '194')
         return self.peaks
         
@@ -233,17 +221,20 @@ class Groups(object):
         
         
 class Node(object):
-    def __init__(self, key, covariates, groups):
+    def __init__(self, key, covariates, groups, mab_object):
         '''
         groups, Groups object
         '''
         self.key_integers = covariates 
         self.__key = key
         self.groups_object = groups #Gropus object
+        self.mab_object = mab_object#All nodes share one single mab_object
         self.counts = {}  #dictionary, article: number
         
 
         self.clicks = {}  #dictionary, article: number
+        
+        self.extra_bonus = {}
         
         '''for updating scanning'''
         self.update_time = 0
@@ -260,9 +251,9 @@ class Node(object):
         self.alpha = 0.5
         self.d = 4 #Basic distant parameter
         self.rho = 0.9 #deflator coefficient
-        self.q = 0.8
-        self.k = 1.5
-        self.__timer = 10 # for groups to update
+        self.q = 0.7
+        #self.k = 1.5
+        self.__timer = 100 # for groups to update
         
         
         
@@ -280,7 +271,7 @@ class Node(object):
             self.distant_sets.append(set())
         
     
-    def update(self, reward, article):
+    def update(self, reward, article, through_recommended):
         '''
         reward: binary number
         
@@ -289,15 +280,32 @@ class Node(object):
         '''articles updating has already been done in the recommend step'''
         self.counts[article] += 1
         self.clicks[article] += reward
+        if through_recommended:
+            self.extra_bonus[article] += 1.0
+        
+        
+        
+        
+        
+        self.groups_object.counter += 1
+        
+        
+        
+        if self.groups_object.counter >= self.__timer and self.groups_object.begin:
+            self.groups_object.counter = 0
+            self.groups_object.update_peaks()
+        
+        
         
         
         ####TESRT########
         self.groups_object.all_nodes_hitting_record[self.__key] += 1
         
 
-        if not self.party_yet[article] and self.counts[article] >= 2 and self.clicks[article]:
+        if not self.party_yet[article] and (self.clicks[article] / self.counts[article]) >= 0.06 and self.counts[article] > 4:            
             print(self.groups_object.counter, self.__key, article, 'join the party', '295')
-            
+            #print(self.extra_bonus, '292')
+            self.groups_object.begin = True
             self.party_yet[article] = True
             self.__join_the_party(article)
     
@@ -330,13 +338,7 @@ class Node(object):
             self.groups[article] = [-1]
         
         self.groups_object.update(self.__key, self, article)
-        self.groups_object.counter += 1
         
-        
-        
-        if self.groups_object.counter >= self.__timer:
-            self.groups_object.counter = 0
-            self.groups_object.update_peaks()
     
     def group(self, article):
         return np.sort(list(self.groups[article]))#list-like
@@ -360,7 +362,7 @@ class Node(object):
         
         length = len(values)
 
-        return np.sort(values)[np.floor(self.q * length).astype(int)] * np.log(length+1)
+        return np.sort(values)[np.floor(self.q * length).astype(int)]# * np.log(length+1)
         
      
     
@@ -389,7 +391,7 @@ class Node(object):
         
         
         
-        if self.groups_object.get_update_time > self.update_time:
+        if self.groups_object.get_update_time > self.update_time:            
             self.update_time = self.groups_object.get_update_time
             current_recommended_articles = self.groups_object.get_peaks.keys()
             current_recommended_articles = current_recommended_articles - self.recommended
@@ -400,28 +402,46 @@ class Node(object):
                     if NodesUtil.distant(self.groups_object.all_active_nodes[peak].key_integers, self.key_integers) <= self.d:
                         self.recommending.add(article)
         
-        if self.recommending:
-            print(self.recommending, 'recommending situation', '400')
-            self.__decided = True
-            
-            extra_bonus = 1.5
-            
-            choice = random.sample(self.recommending, 1)[0]
-            self.recommending.remove(choice)
-            self.recommended.add(choice)
-            
-            return choice, extra_bonus
-           
-        else:        
+            if self.recommending:
+                #print(self.extra_bonus, 'recommended', '391')
+                
+                #self.__decided = True###TET
+                
+                
+                extra_bonus = 0#dont need it
+                
+                values = np.array([])
+                articles = []
+                for article in self.counts.keys():
+                    values = np.append(values, (self.extra_bonus[article] + self.mab_object.clicks[article]) / self.mab_object.counts[article] + self.alpha * np.sqrt(1/(self.mab_object.counts[article]+1)))
+                    articles.append(article)
+                
+                
+                
+                
+                return articles[np.argmax(values)], extra_bonus, True
+                
+                
+                '''
+                
+                choice = random.sample(self.recommending, 1)[0]
+                self.recommending.remove(choice)
+                #self.recommended.add(choice)
+                
+                return choice, extra_bonus
+                '''
+        if self.__decided:
             extra_bonus = 0.0
             values = np.array([])
             articles = []
             for article in self.counts.keys():
-                values = np.append(values, self.clicks[article] / (1 + self.counts[article]) + self.alpha * np.sqrt(1/(self.counts[article]+1)))
+                values = np.append(values, (self.extra_bonus[article] + self.clicks[article]) / (1 + self.counts[article]) + self.alpha * np.sqrt(1/(self.counts[article]+1)))
                 articles.append(article)
    
             
-            return articles[np.argmax(values)], extra_bonus
+            return articles[np.argmax(values)], extra_bonus, False
+        else:
+            return self.mab_object.recommend()
     
     '''While the node hasnt made its own decision, it still require arms updating'''
     def articles_update(self, articles_collector):
@@ -433,10 +453,12 @@ class Node(object):
         for article in extra_articles:           
             self.counts[article] = 0
             self.clicks[article] = 0
+            self.extra_bonus[article] = 0
             self.party_yet[article] = False
         for article in delete_articles:
             del self.counts[article]
             del self.clicks[article]
+            del self.extra_bonus[article]
             del self.party_yet[article]
             
     @property
@@ -617,11 +639,11 @@ class Assigner(object):
     Assigner create nodes. It takes Groups object as parameter so it can assign
     the object to the created nodes.
     '''
-    def __init__(self, groups_object):
+    def __init__(self, groups_object, mab_object):
         '''saving all nodes'''
         self.all_nodes = {}
         self.all_nodes_set = set()
-        
+        self.mab_object = mab_object
         
 
         self.groups_object = groups_object
@@ -636,7 +658,7 @@ class Assigner(object):
             return self.all_nodes[key], True
             
         else:
-            node = Node(key, covariates, self.groups_object)
+            node = Node(key, covariates, self.groups_object, self.mab_object)
             self.all_nodes[key] = node
             
             self.groups_object.all_nodes_hitting_record[key] = 0 ####TETS
@@ -683,7 +705,7 @@ class MAB(object):
         
     def recommend(self):
         '''updating all article indexes'''
-        
+        '''
         current_articles_set = self.counts.keys() #set of articles(string)
         extra_articles = self.articles_collector.active_articles - current_articles_set
         delete_articles = current_articles_set - self.articles_collector.active_articles
@@ -694,27 +716,49 @@ class MAB(object):
         for article in delete_articles:
             del self.counts[article]
             del self.clicks[article]
-        
+        '''
         extra_bonus = 0.0
         values = np.array([])
         articles = []
         for article in self.counts.keys():
             values = np.append(values, self.clicks[article] / self.counts[article] + self.alpha * np.sqrt(1/(self.counts[article]+1)))
             articles.append(article)
+            
+            
+        #print(articles[np.argmax(values)], '726')
         
-        return articles[np.argmax(values)], extra_bonus   
+        
+        return articles[np.argmax(values)], extra_bonus, False#through_recommended
         
         
     def update(self, reward, article):
         '''
         article is a string
         '''
+        
+        
+        
+        #print(self.counts, '714')
         self.counts[article] += 1
         self.clicks[article] += reward
+        #print(self.counts[article], self.clicks[article], article, '703')
+        
+    '''While the node hasnt made its own decision, it still require arms updating'''
+    def articles_update(self, articles_collector):
+        '''updating all article indexes'''
+        
+        current_articles_set = self.counts.keys()#set of articles(string)
+        extra_articles = articles_collector.active_articles - current_articles_set
+        delete_articles = current_articles_set - articles_collector.active_articles
+        
 
-        
-        
-        
+        for article in extra_articles:    
+            self.counts[article] = 1
+            self.clicks[article] = 0
+        for article in delete_articles:
+            del self.counts[article]
+            del self.clicks[article]
+
         
         
 
@@ -735,13 +779,18 @@ class Agent(object):
         self.mab_object = mab_object
         
         
-        self.assigner = Assigner(groups_object)
+        self.assigner = Assigner(groups_object, mab_object)
         
         self.articles_collector = groups_object.articles_collector
         
         
         self.last_action = '' # a string
         self.extra_bonus = 0
+        
+        
+        
+        self.through_recommended = False
+        self.recommend_counter = {'reco':0, 'mab':0}
         
     def update(self, reward, stuff):
         
@@ -756,7 +805,7 @@ class Agent(object):
           
         
         reward = reward
-        reward += self.extra_bonus
+        
         
         
         '''
@@ -766,11 +815,18 @@ class Agent(object):
         node, used_node = self.assigner.assign(key, covariates)
         
         
-        if not node.decided:
-            self.mab_object.update(reward, self.last_action) #self.last_action is an article string
+        '''MAB can share the information'''
+        self.mab_object.update(reward, self.last_action) #self.last_action is an article string
         
-        node.update(reward, self.last_action)
+        node.update(reward, self.last_action, self.through_recommended)
+        self.through_recommended = False
         
+        '''Recommending counter'''
+        if self.through_recommended:
+            self.recommend_counter['reco'] += 1
+        else:
+            self.recommend_counter['mab'] += 1
+        #print(self.recommend_counter, '825')#OK
         
         '''Refresh extra_bonus'''
         self.extra_bonus = 0
@@ -790,11 +846,10 @@ class Agent(object):
         
         node, used_node = self.assigner.assign(key, covariates)
         node.articles_update(self.articles_collector)
+        self.mab_object.articles_update(self.articles_collector)
         
-        if node.decided:
-            self.last_action, self.extra_bonus = node.recommend(self.articles_collector)        
-        else:            
-            self.last_action, self.extra_bonus = self.mab_object.recommend() #The node is not ready, still using mab object.
+        self.last_action, self.extra_bonus, self.through_recommended = node.recommend(self.articles_collector)        
+        
         
         return self.last_action
         
@@ -877,8 +932,9 @@ def main():
     
     AC = ArticlesCollector()
     G = Groups(AC)
-    A = Assigner(G)
+    
     M = MAB(AC)
+    
     AG = Agent(G, M)
     
     E = Environment()
