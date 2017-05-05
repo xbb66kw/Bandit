@@ -152,12 +152,12 @@ class Groups(object):
         
         
             
-								mid_group_values, mid_group_peaks = NodesUtil.peaks(self.groups, self.all_active_nodes) #return a list of keys
-				
-								for index in range(len(mid_group_peaks)):
-												group_peaks = np.append(group_peaks, mid_group_peaks[index])
-												group_values = np.append(group_values, mid_group_values[index])
-												
+        mid_group_values, mid_group_peaks = NodesUtil.peaks(self.groups, self.all_active_nodes) #return a list of keys
+    
+        for index in range(len(mid_group_peaks)):
+            group_peaks = np.append(group_peaks, mid_group_peaks[index])
+            group_values = np.append(group_values, mid_group_values[index])
+            
                     
                     
        
@@ -183,7 +183,7 @@ class Groups(object):
         
     
     def articles_update(self, articles_collector):
-    				pass
+        pass
     
         '''updating the articles for self.groups and self.peaks'''    
         '''
@@ -375,26 +375,26 @@ class Node(object):
             current_recommended_peaks = current_recommended_peaks - self.recommending
             
             for node in current_recommended_peaks:
-																if NodesUtil.distant(node.key_integers, self.key_integers) <= self.d:
-																				self.recommending.add(node)
+                if NodesUtil.distant(node.key_integers, self.key_integers) <= self.d:
+                    self.recommending.add(node)
         
             if self.recommending:
-            				'''We can check, self.recommending is supposed to be a singleton'''
+                '''We can check, self.recommending is supposed to be a singleton'''
                 print(self.recommending, 'recommended', '406')
                 
                 all_neighbor_counts = {}
                 all_neighbor_clicks = {}
                 for article in self.counts.keys():
-                				all_neighbor_counts[article] = 0
-                				all_neighbor_clicks[article] = 0
+                    all_neighbor_counts[article] = 0
+                    all_neighbor_clicks[article] = 0
                 for node in self.recommending:
-                				for key in node.neighbors:
-                								counts_mid = self.groups_object.all_active_nodes[key]
-                								clicks_mid = self.groups_object.all_active_nodes[key]
-                								for article in counts_mid.keys():
-																												all_neighbor_counts[article] += counts_mid.counts_dictionary[article]
-																												all_neighbor_clicks[article] += clicks_mid.clicks_dictionary[article]
-                								
+                    for key in node.neighbors:
+                        counts_mid = self.groups_object.all_active_nodes[key]
+                        clicks_mid = self.groups_object.all_active_nodes[key]
+                        for article in counts_mid.keys():
+                            all_neighbor_counts[article] += counts_mid.counts_dictionary[article]
+                            all_neighbor_clicks[article] += clicks_mid.clicks_dictionary[article]
+                        
 
                 
                 values = np.array([])
@@ -442,16 +442,16 @@ class Node(object):
         return self.counts[article]
         
     @property
-    def clicks_dictionary(self):    				
-    				return self.clicks
+    def clicks_dictionary(self):        
+        return self.clicks
     @property
-    def counts_dictionary(self):    				
-    				return self.counts
+    def counts_dictionary(self):        
+        return self.counts
     @property    
     def overall_average(self):
-    				average = sum(self.clicks.values()) / sum(self.counts.values())
-    				return average
-    				
+        average = sum(self.clicks.values()) / sum(self.counts.values())
+        return average
+        
     def average(self, article):
         return self.clicks[article] / self.counts[article]       
     
