@@ -101,107 +101,107 @@ class Util(object):
         
 class Graph(object):    
     def __init__(self, articles_set, list_keys_set, collector, model=None):
-								'''
-								articles_set: a set of articles(numbers)
-								list_keys_set: exhaustive sets
-								articles_set: a set of numbers
-								'''
-								self.__articles = set()
-								self.__articles.update(articles_set)
-								
-								self.__article_numbers = [{} for i in range(len(list_keys_set))]
-								self.__article_clicks = [{} for i in range(len(list_keys_set))]
-								
-								
-								self.__collector = collector
-								
-								self.__all_keys = set()
-								self.__list_keys_set = [] #list of sets
-								
-								self.__numbers_keys_set = [0 for i in range(len(list_keys_set))]
-								
-								self.__clicks_keys_set = [0 for i in range(len(list_keys_set))]
-								
-								
-								
-								for index, keyset in enumerate(list_keys_set):
-												self.__list_keys_set.append(keyset)
-												print(index, len(articles_set), 'length of article sets', len(keyset), '126')
-												self.__all_keys.update(keyset)
-												
-												X, y = self.__collector.get_article_covariates(articles_set, keyset)
-												self.__numbers_keys_set[index] += len(y)
-												self.__clicks_keys_set[index] += sum(y)
-												
-								
-								
-								'''initializeing article-specific clicks'''
-								for article in self.__articles:            
-												for index, keyset in enumerate(list_keys_set):
-																X, y = self.__collector.get_article_covariates(article, keyset)
-																self.__article_numbers[index].update({article:len(y)})
-																self.__article_clicks[index].update({article:sum(y)})
-								
-								print(self.__article_numbers, '145')
-								print(self.__article_clicks, '146')
-								
-								
-								'''Create inverse matrix with model_ information'''
-								global MODEL
-								self.__model = np.array(MODEL)
-								model = np.array(MODEL)###
-								if len(model) > 0:												
-												self.__article_inverses = {}
-												mid_overall = np.eye(model.shape[0])
-												for article in self.__articles:        				
-																keys_list = [key for sub_list in list_keys_set for key in sub_list]
-																design, y = self.__collector.get_article_covariates(article, keys_list)
-																
-																if design.shape[0]:
-																				sub_d = design[:,model]
-																				
-																				matrix_ = np.dot(sub_d.T, sub_d)        				
-																				mid_ = inv(matrix_ + np.eye(model.shape[0]))
-																				
-																				self.__article_inverses[article] = mid_
-																				mid_overall += matrix_
-																else:
-																				self.__article_inverses[article] = np.eye(model.shape[0])
-																				
-																								
-												self.__overall_inverse = inv(mid_overall)
-								
+        '''
+        articles_set: a set of articles(numbers)
+        list_keys_set: exhaustive sets
+        articles_set: a set of numbers
+        '''
+        self.__articles = set()
+        self.__articles.update(articles_set)
+        
+        self.__article_numbers = [{} for i in range(len(list_keys_set))]
+        self.__article_clicks = [{} for i in range(len(list_keys_set))]
+        
+        
+        self.__collector = collector
+        
+        self.__all_keys = set()
+        self.__list_keys_set = [] #list of sets
+        
+        self.__numbers_keys_set = [0 for i in range(len(list_keys_set))]
+        
+        self.__clicks_keys_set = [0 for i in range(len(list_keys_set))]
+        
+        
+        
+        for index, keyset in enumerate(list_keys_set):
+            self.__list_keys_set.append(keyset)
+            print(index, len(articles_set), 'length of article sets', len(keyset), '126')
+            self.__all_keys.update(keyset)
+            
+            X, y = self.__collector.get_article_covariates(articles_set, keyset)
+            self.__numbers_keys_set[index] += len(y)
+            self.__clicks_keys_set[index] += sum(y)
+            
+        
+        
+        '''initializeing article-specific clicks'''
+        for article in self.__articles:            
+            for index, keyset in enumerate(list_keys_set):
+                X, y = self.__collector.get_article_covariates(article, keyset)
+                self.__article_numbers[index].update({article:len(y)})
+                self.__article_clicks[index].update({article:sum(y)})
+        
+        print(self.__article_numbers, '145')
+        print(self.__article_clicks, '146')
+        
+        
+        '''Create inverse matrix with model_ information'''
+        global MODEL
+        self.__model = np.array(MODEL)
+        model = np.array(MODEL)###
+        if len(model) > 0:            
+            self.__article_inverses = {}
+            mid_overall = np.eye(model.shape[0])
+            for article in self.__articles:            
+                keys_list = [key for sub_list in list_keys_set for key in sub_list]
+                design, y = self.__collector.get_article_covariates(article, keys_list)
+                
+                if design.shape[0]:
+                    sub_d = design[:,model]
+                    
+                    matrix_ = np.dot(sub_d.T, sub_d)            
+                    mid_ = inv(matrix_ + np.eye(model.shape[0]))
+                    
+                    self.__article_inverses[article] = mid_
+                    mid_overall += matrix_
+                else:
+                    self.__article_inverses[article] = np.eye(model.shape[0])
+                    
+                        
+            self.__overall_inverse = inv(mid_overall)
+        
 
     '''Updating for newly coming key'''
     def update(self, article, key, click, cov):
-								
-								if article in self.__articles:												
-												if len(self.__model) > 0:
-																cov = cov[self.__model]
-																self.__article_inverses[article] = inv(inv(self.__article_inverses[article]) + np.dot(cov[:,None], cov[None,:]))
-																self.__overall_inverse = inv(inv(self.__overall_inverse) + np.dot(cov[:,None], cov[None,:]))
-																
-												if key in self.__all_keys:
-																for index, keyset in enumerate(self.__list_keys_set):
-																				if key in keyset:
-																								self.__numbers_keys_set[index] += 1
-																								self.__clicks_keys_set[index] += click
-																								
-																								self.__article_numbers[index][article] += 1
-																								self.__article_clicks[index][article] += click
-																				
-												else:#Adding key to the first set
-																index = 0
-																self.__all_keys.add(key)
-																self.__list_keys_set[index].add(key)
-																
-																self.__numbers_keys_set[index] += 1
-																self.__clicks_keys_set[index] += click
-								
-																self.__article_numbers[index][article] += 1
-																self.__article_clicks[index][article] += click
-																
-																
+        
+        if article in self.__articles:            
+            if len(self.__model) > 0:
+                cov = cov[self.__model]
+                self.__article_inverses[article] = inv(inv(self.__article_inverses[article]) + np.dot(cov[:,None], cov[None,:]))
+                self.__overall_inverse = inv(inv(self.__overall_inverse) + np.dot(cov[:,None], cov[None,:]))
+                
+            if key in self.__all_keys:
+                for index, keyset in enumerate(self.__list_keys_set):
+                    if key in keyset:
+                        self.__numbers_keys_set[index] += 1
+                        self.__clicks_keys_set[index] += click
+                        
+                        self.__article_numbers[index][article] += 1
+                        self.__article_clicks[index][article] += click
+                    
+            else:#Adding key to the first set
+                index = 0
+                self.__all_keys.add(key)
+                self.__list_keys_set[index].add(key)
+                
+                self.__numbers_keys_set[index] += 1
+                self.__clicks_keys_set[index] += click
+        
+                self.__article_numbers[index][article] += 1
+                self.__article_clicks[index][article] += click
+                
+                
     def get_data(self, key):
         '''return playing times and clicks for this articles set'''
         '''
@@ -216,13 +216,13 @@ class Graph(object):
     
     @property
     def model(self):
-    				return self.__model
+        return self.__model
     @property
     def get_overall_inverse(self):
-    				return self.__overall_inverse
+        return self.__overall_inverse
     @property
     def get_article_inverses(self):
-    				return self.__article_inverses
+        return self.__article_inverses
     
     @property
     def all_keys(self):
@@ -241,59 +241,59 @@ class Graph(object):
                 return self.__article_numbers[index], self.__article_clicks[index]
     
     def get_all_data(self):#now we don't use differentiated consumers
-    				return self.__article_numbers[0], self.__article_clicks[0]
+        return self.__article_numbers[0], self.__article_clicks[0]
     def get_special_data(self):#now we don't use differentiated consumers
-    				return self.__article_numbers[1], self.__article_clicks[1]
+        return self.__article_numbers[1], self.__article_clicks[1]
     
     def update_articles(self, articles_collector, first_graph, delete_articles=None, extra_articles=None):        
-								
-								if first_graph:
-												
-												self.__articles.update(extra_articles)
-												
-												for article in extra_articles:
-																len_ = len(self.__article_numbers)
-																
-																for index in range(len_):
-																				#set_ is a dictionary of articles and numbers.
-																				self.__article_numbers[index][article] = 0
-																				self.__article_clicks[index][article] = 0
-																if len(self.__model) > 0:                        
-																				self.__article_inverses[article] = np.eye(self.__model.shape[0])
-																
-								for article in delete_articles:																								
-												if article in self.__articles:
-																if len(self.__model) > 0:                        
-																				del self.__article_inverses[article]
-																
-																len_ = len(self.__article_numbers)
-																
-								
-																for index in range(len_):                    
-																				#if article in self.__article_numbers[index].keys():
-																				number = self.__article_numbers[index][article]
-								
-																				del self.__article_numbers[index][article]
-																				click = self.__article_clicks[index][article]
-																				del self.__article_clicks[index][article]
-																				
-								
-																				
-																				self.__numbers_keys_set[index] -= number    
-																				self.__clicks_keys_set[index] -= click
-																				
-																
-																self.__articles.remove(article)
-												
-												#destroy this graph
-												if not self.__articles:
-																print('destroyed graph 223!!!!')
-																return True
-								
-								
-								
-								return False
-								
+        
+        if first_graph:
+            
+            self.__articles.update(extra_articles)
+            
+            for article in extra_articles:
+                len_ = len(self.__article_numbers)
+                
+                for index in range(len_):
+                    #set_ is a dictionary of articles and numbers.
+                    self.__article_numbers[index][article] = 0
+                    self.__article_clicks[index][article] = 0
+                if len(self.__model) > 0:                        
+                    self.__article_inverses[article] = np.eye(self.__model.shape[0])
+                
+        for article in delete_articles:                        
+            if article in self.__articles:
+                if len(self.__model) > 0:                        
+                    del self.__article_inverses[article]
+                
+                len_ = len(self.__article_numbers)
+                
+        
+                for index in range(len_):                    
+                    #if article in self.__article_numbers[index].keys():
+                    number = self.__article_numbers[index][article]
+        
+                    del self.__article_numbers[index][article]
+                    click = self.__article_clicks[index][article]
+                    del self.__article_clicks[index][article]
+                    
+        
+                    
+                    self.__numbers_keys_set[index] -= number    
+                    self.__clicks_keys_set[index] -= click
+                    
+                
+                self.__articles.remove(article)
+            
+            #destroy this graph
+            if not self.__articles:
+                print('destroyed graph 223!!!!')
+                return True
+        
+        
+        
+        return False
+        
 
     @property
     def test(self):
@@ -303,225 +303,225 @@ class Graph(object):
         
     
 class model_UCB1(object):
-				def __init__(self, collector, articles_collector, list_graphs, alpha = None):
-								'''list_graphs: list of graph objects'''
-								
-								self.__articles_collector = articles_collector
-								self.__collector = collector
-								self.__list_graphs = list_graphs
-								
-								
-								self.last_action = -1
-								self.special_recommend = False
-								self.articles_counter = {}
-					
-								self.alpha = alpha
-								
-								self.first_round = -1
-								
-								
-								self.counter = 0
-								self.counter_special = 0
-				def update_graphs(self, list_graphs):
-								self.__list_graphs = list_graphs
-								
-				def update(self, key, article, click, cov):
-								self.counter += 1
-								
-								
-								
-								if self.special_recommend:
-												#print('test', '333')
-												self.articles_counter[article] += 1
-												self.counter_special += 1
-								'''
-								Newly coming article comes into the first graph.
-								Newly coming key comes into the first key set of the corresponding article graph.
-								'''
-								for graph in self.__list_graphs:
-												if article in graph.get_articles:
-																graph.update(article, key, click, cov)
-																
-				
-				
-				def recommend(self, key, cov):
-								#For starting
-								if self.counter <= 100:
-												numbers_object = self.__collector.article_numbers
-												articles = []												
-												articles.extend(numbers_object.keys())
-												return articles[2], False
-								#For new articles
-								global FEW
-								
-								global MODEL
-								
-								
-								
-								
-								if len(self.__list_graphs[0].model) > 0:
-												model_ = MODEL#self.__list_graphs[0].model											
-								else:
-												model_ = []
-								
-								
-								#special event
-								if sum(cov[np.array(model_).astype(int)]) > 2/3 * len(np.array(model_)):
-												
-												#if int(self.counter / 1000) == self.counter / 1000:
-																#print('number of special assignment:', self.counter_special, self.articles_counter, '367')
-												
-												for article in self.__collector.all_articles:
-																
-																if not article in self.articles_counter.keys():
-																				self.articles_counter.update({article:0})
-																
-																
-																if self.articles_counter[article] <= GREEDY:																																																																																										
-																				self.last_action = article
-																				
-																				
-																				return self.last_action, True
-																				
-								if len(self.__list_graphs) > 1:
-												
-												group1_numbers, group1_clicks = self.__list_graphs[0].get_all_data()
-												group2_numbers, group2_clicks = self.__list_graphs[1].get_all_data()
-												numbers = [0, 0]
-												clicks = [0, 0]
-												
-												for article in group1_numbers.keys():
-																numbers[0] += group1_numbers[article]
-																clicks[0] += group1_clicks[article]
-												for article in group2_numbers.keys():
-																numbers[1] += group2_numbers[article]
-																clicks[1] += group2_clicks[article]
-												
-												max_index = model_UCB1.max_finder_cluster(cov, self.__list_graphs, numbers, clicks, total = self.counter, alpha = None, model=model_)
-												
-												graph = self.__list_graphs[max_index]
-												#round 2
-												
-												group_numbers, group_clicks = graph.get_all_data()
-												
-												numbers = [0 for i in range(len(group_numbers.keys()))]
-												clicks = [0 for i in range(len(group_numbers.keys()))]
-												articles_ = []
-												
-												for index, article in enumerate(group_numbers.keys()):
-																numbers[index] += group_numbers[article]
-																clicks[index] += group_clicks[article]
-																articles_.append(article)
-																
-												max_index = model_UCB1.max_finder_expedience(cov, graph, numbers, clicks, self.counter, self.alpha, model_)
-												self.last_action = articles_[max_index]
-												
-												return self.last_action, False
-								else:
-												graph = self.__list_graphs[0]
-												
-												group_numbers, group_clicks = graph.get_all_data()
-												
-												numbers = [0 for i in range(len(group_numbers.keys()))]
-												clicks = [0 for i in range(len(group_numbers.keys()))]
-												articles_ = []
-												
-												for index, article in enumerate(group_numbers.keys()):
-																numbers[index] += group_numbers[article]
-																clicks[index] += group_clicks[article]
-																articles_.append(article)
-																
-												max_index = model_UCB1.max_finder_expedience(cov, graph, numbers, clicks, self.counter, self.alpha, model_)
-												self.last_action = articles_[max_index]
-												
-												return self.last_action, False
-												
-				
-				
-				@staticmethod
-				def max_finder_cluster(cov, graphs, numbers, clicks, total = None, alpha = None, model=None):
-								'''
-								numbers: list
-								clicks: list
-								'''
-								
-								numbers = np.array(numbers)
-								sum_ = np.sum(numbers)
-								clicks = np.array(clicks)
-								
-								#alpha = 0.05
-								array_ = (clicks)/ (numbers + 1) + ALPHA_BETWEEN * np.sqrt(np.log(sum_+1)/(numbers+1))
-								
-								return np.random.choice(np.where(array_ == array_.max())[0])
-								
-								
-				@staticmethod
-				def max_finder_expedience(cov, graph, numbers, clicks, total = None, alpha = None, model=None):
-								'''
-								numbers: list
-								clicks: list
-								'''
-								numbers = np.array(numbers)
-								sum_ = np.sum(numbers)
-								clicks = np.array(clicks)
-								
-								
-								#deter = np.maximum(numbers - 20, np.zeros(len(numbers)))
-								#if any(deter == 0):
-								#				return np.random.choice(np.where(deter == 0.0)[0])
-												
-								array_ = (clicks)/ (numbers + 1) + ALPHA_WITHIN * np.sqrt(np.log(sum_+1)/(numbers+1))# + directions
+    def __init__(self, collector, articles_collector, list_graphs, alpha = None):
+        '''list_graphs: list of graph objects'''
+        
+        self.__articles_collector = articles_collector
+        self.__collector = collector
+        self.__list_graphs = list_graphs
+        
+        
+        self.last_action = -1
+        self.special_recommend = False
+        self.articles_counter = {}
+     
+        self.alpha = alpha
+        
+        self.first_round = -1
+        
+        
+        self.counter = 0
+        self.counter_special = 0
+    def update_graphs(self, list_graphs):
+        self.__list_graphs = list_graphs
+        
+    def update(self, key, article, click, cov):
+        self.counter += 1
+        
+        
+        
+        if self.special_recommend:
+            #print('test', '333')
+            self.articles_counter[article] += 1
+            self.counter_special += 1
+        '''
+        Newly coming article comes into the first graph.
+        Newly coming key comes into the first key set of the corresponding article graph.
+        '''
+        for graph in self.__list_graphs:
+            if article in graph.get_articles:
+                graph.update(article, key, click, cov)
+                
+    
+    
+    def recommend(self, key, cov):
+        #For starting
+        if self.counter <= 100:
+            numbers_object = self.__collector.article_numbers
+            articles = []            
+            articles.extend(numbers_object.keys())
+            return articles[2], False
+        #For new articles
+        global FEW
+        
+        global MODEL
+        
+        
+        
+        
+        if len(self.__list_graphs[0].model) > 0:
+            model_ = MODEL#self.__list_graphs[0].model           
+        else:
+            model_ = []
+        
+        
+        #special event
+        if sum(cov[np.array(model_).astype(int)]) > 2/3 * len(np.array(model_)):
+            
+            #if int(self.counter / 1000) == self.counter / 1000:
+                #print('number of special assignment:', self.counter_special, self.articles_counter, '367')
+            
+            for article in self.__collector.all_articles:
+                
+                if not article in self.articles_counter.keys():
+                    self.articles_counter.update({article:0})
+                
+                
+                if self.articles_counter[article] <= GREEDY:                                                                                          
+                    self.last_action = article
+                    
+                    
+                    return self.last_action, True
+                    
+        if len(self.__list_graphs) > 1:
+            
+            group1_numbers, group1_clicks = self.__list_graphs[0].get_all_data()
+            group2_numbers, group2_clicks = self.__list_graphs[1].get_all_data()
+            numbers = [0, 0]
+            clicks = [0, 0]
+            
+            for article in group1_numbers.keys():
+                numbers[0] += group1_numbers[article]
+                clicks[0] += group1_clicks[article]
+            for article in group2_numbers.keys():
+                numbers[1] += group2_numbers[article]
+                clicks[1] += group2_clicks[article]
+            
+            max_index = model_UCB1.max_finder_cluster(cov, self.__list_graphs, numbers, clicks, total = self.counter, alpha = None, model=model_)
+            
+            graph = self.__list_graphs[max_index]
+            #round 2
+            
+            group_numbers, group_clicks = graph.get_all_data()
+            
+            numbers = [0 for i in range(len(group_numbers.keys()))]
+            clicks = [0 for i in range(len(group_numbers.keys()))]
+            articles_ = []
+            
+            for index, article in enumerate(group_numbers.keys()):
+                numbers[index] += group_numbers[article]
+                clicks[index] += group_clicks[article]
+                articles_.append(article)
+                
+            max_index = model_UCB1.max_finder_expedience(cov, graph, numbers, clicks, self.counter, self.alpha, model_)
+            self.last_action = articles_[max_index]
+            
+            return self.last_action, False
+        else:
+            graph = self.__list_graphs[0]
+            
+            group_numbers, group_clicks = graph.get_all_data()
+            
+            numbers = [0 for i in range(len(group_numbers.keys()))]
+            clicks = [0 for i in range(len(group_numbers.keys()))]
+            articles_ = []
+            
+            for index, article in enumerate(group_numbers.keys()):
+                numbers[index] += group_numbers[article]
+                clicks[index] += group_clicks[article]
+                articles_.append(article)
+                
+            max_index = model_UCB1.max_finder_expedience(cov, graph, numbers, clicks, self.counter, self.alpha, model_)
+            self.last_action = articles_[max_index]
+            
+            return self.last_action, False
+            
+    
+    
+    @staticmethod
+    def max_finder_cluster(cov, graphs, numbers, clicks, total = None, alpha = None, model=None):
+        '''
+        numbers: list
+        clicks: list
+        '''
+        
+        numbers = np.array(numbers)
+        sum_ = np.sum(numbers)
+        clicks = np.array(clicks)
+        
+        #alpha = 0.05
+        array_ = (clicks)/ (numbers + 1) + ALPHA_BETWEEN * np.sqrt(np.log(sum_+1)/(numbers+1))
+        
+        return np.random.choice(np.where(array_ == array_.max())[0])
+        
+        
+    @staticmethod
+    def max_finder_expedience(cov, graph, numbers, clicks, total = None, alpha = None, model=None):
+        '''
+        numbers: list
+        clicks: list
+        '''
+        numbers = np.array(numbers)
+        sum_ = np.sum(numbers)
+        clicks = np.array(clicks)
+        
+        
+        #deter = np.maximum(numbers - 20, np.zeros(len(numbers)))
+        #if any(deter == 0):
+        #    return np.random.choice(np.where(deter == 0.0)[0])
+            
+        array_ = (clicks)/ (numbers + 1) + ALPHA_WITHIN * np.sqrt(np.log(sum_+1)/(numbers+1))# + directions
 
-								return np.random.choice(np.where(array_ == array_.max())[0])				
-				
-								
-								
-								
-				#Updating the article, not the keys
-				def update_articles(self, articles_collector):
-								destroying = [False]
-								
-								extra_articles = articles_collector.active_articles
-								for graph in self.__list_graphs:
-												extra_articles = extra_articles - graph.get_articles
-									
-								delete_articles = set()
-								mid_ = set()
-								for graph in self.__list_graphs:
-												mid_ = mid_ | graph.get_articles
-								
-								delete_articles = mid_ - articles_collector.active_articles
-								
-								
-								
-								
-								
-								for index in range(len(self.__list_graphs)): 
-												if index == 0:
-																
-															
-																self.__list_graphs[index].update_articles(articles_collector, True, delete_articles, extra_articles)
-												else:
-																destroying.append(self.__list_graphs[index].update_articles(articles_collector, False, delete_articles))
-																
-								list_mid_graphs = []
-								for index, bool_ in enumerate(destroying):
-												if not bool_:
-																list_mid_graphs.append(self.__list_graphs[index])
-								
-								#Remove those article empty graph 
-								self.__list_graphs = list_mid_graphs
-								
-								
-								
-				@property
-				def get_graphs(self):
-								return self.__list_graphs
-				
-				
-				
-				
-				
+        return np.random.choice(np.where(array_ == array_.max())[0])    
+    
+        
+        
+        
+    #Updating the article, not the keys
+    def update_articles(self, articles_collector):
+        destroying = [False]
+        
+        extra_articles = articles_collector.active_articles
+        for graph in self.__list_graphs:
+            extra_articles = extra_articles - graph.get_articles
+         
+        delete_articles = set()
+        mid_ = set()
+        for graph in self.__list_graphs:
+            mid_ = mid_ | graph.get_articles
+        
+        delete_articles = mid_ - articles_collector.active_articles
+        
+        
+        
+        
+        
+        for index in range(len(self.__list_graphs)): 
+            if index == 0:
+                
+               
+                self.__list_graphs[index].update_articles(articles_collector, True, delete_articles, extra_articles)
+            else:
+                destroying.append(self.__list_graphs[index].update_articles(articles_collector, False, delete_articles))
+                
+        list_mid_graphs = []
+        for index, bool_ in enumerate(destroying):
+            if not bool_:
+                list_mid_graphs.append(self.__list_graphs[index])
+        
+        #Remove those article empty graph 
+        self.__list_graphs = list_mid_graphs
+        
+        
+        
+    @property
+    def get_graphs(self):
+        return self.__list_graphs
+    
+    
+    
+    
+    
 
 class Collector(object):
     
@@ -794,107 +794,107 @@ class Collector(object):
     
     '''Refresh the newly coming keys (in all graphs)'''
     def model_selection_graphs(self, list_graphs):
-								
-								final_graphs_list = []
-								
-								Logistic = HighDimensionalLogisticRegression(fit_intercept=False)
-																
-								keys_set = self.all_keys
-								
-								articles = set()
-								articles_emergency = set()
-								article_indexes = []
-								article_compe = []
-								
-								article_not_all_zeros = set()
-								
-								global MODEL
-								global FEW
-								#MODEL = []
-								model_bool = np.array([]).astype(int)
-								FEW = []
-								#FEW2 = []
-								for article in self.all_articles:
-												X, y = self.get_article_covariates(article, keys_set)
-												
-												#if len(y) > 5:
-												article_indexes.append(article)
-												
-												if len(y) == 0:
-																article_compe.append(0)
-												else:
-																article_compe.append(np.mean(y))
-																
-												if len(y) <= 15:																																																																										
-																FEW.append(article)
-																
-								n_ = len(article_compe)
-								
-								std = np.std(article_compe)
-								ave = np.mean(article_compe)
-								skewness = stats.skew(article_compe)
-								
-								global para1
-								global para2
-								global para3
-								
-								ordered_compe = np.sort(article_compe)[::-1]
-								
-								l = 0
-								if len(article_compe) > 0 and sum(article_compe) != 0.0:
-												while len(ordered_compe) > l and ordered_compe[l] >= (ave + para1 * std + para2 * l * std + para3 * (l + 1) * abs(skewness)):
-																l = l + 1						
-								else:
-												return [Graph(self.all_articles, [keys_set], self, model_bool)]
-								
-								print(articles, skewness, std, ave, l, len(article_compe), '902')
-								
-								
-																																				
-								places = np.sort(article_compe)[(n_-l):n_]
-								article_indexes = np.array(article_indexes)
-								
-								
-								result = set([int(article) for article in article_indexes[np.in1d(article_compe, places)]])
-								#result.update(articles)
-								
-								X, y = self.get_article_covariates(self.all_articles, keys_set)
-								
-								Logistic.fit(X, y)
-								
-								if len(Logistic.model_) > 1:																
-												model_bool = np.append(model_bool, Logistic.model_[Logistic.coef_[Logistic.coef_ != 0] > 0])																
-												model_bool = np.setdiff1d(model_bool, 0)
-																
-								if model_bool.shape[0] > 0:												
-												model_bool.flatten()		
-												model_bool = np.unique(model_bool)													
-								else:
-												model_bool = None
-								
-								
-								
-								if not model_bool is None:												
-												MODEL.extend(model_bool)
-												MODEL = list(np.unique(MODEL))												
-												
-								print(model_bool, MODEL, '893')
-												
-								if l > 0 and l < len(self.all_articles) and len(MODEL) > 0:
-												graph2 = Graph(result, [keys_set], self, model_bool)#collector
-												graph3 = Graph(self.all_articles - result, [keys_set], self, model_bool)#collector
-												
-												final_graphs_list.append(graph3)
-												final_graphs_list.append(graph2)
-												
-												return final_graphs_list
-												
-								else:
-												return [Graph(self.all_articles, [keys_set], self, model_bool)]
-								
-								
-								
-								
+        
+        final_graphs_list = []
+        
+        Logistic = HighDimensionalLogisticRegression(fit_intercept=False)
+                
+        keys_set = self.all_keys
+        
+        articles = set()
+        articles_emergency = set()
+        article_indexes = []
+        article_compe = []
+        
+        article_not_all_zeros = set()
+        
+        global MODEL
+        global FEW
+        #MODEL = []
+        model_bool = np.array([]).astype(int)
+        FEW = []
+        #FEW2 = []
+        for article in self.all_articles:
+            X, y = self.get_article_covariates(article, keys_set)
+            
+            #if len(y) > 5:
+            article_indexes.append(article)
+            
+            if len(y) == 0:
+                article_compe.append(0)
+            else:
+                article_compe.append(np.mean(y))
+                
+            if len(y) <= 15:                                                                          
+                FEW.append(article)
+                
+        n_ = len(article_compe)
+        
+        std = np.std(article_compe)
+        ave = np.mean(article_compe)
+        skewness = stats.skew(article_compe)
+        
+        global para1
+        global para2
+        global para3
+        
+        ordered_compe = np.sort(article_compe)[::-1]
+        
+        l = 0
+        if len(article_compe) > 0 and sum(article_compe) != 0.0:
+            while len(ordered_compe) > l and ordered_compe[l] >= (ave + para1 * std + para2 * l * std + para3 * (l + 1) * abs(skewness)):
+                l = l + 1      
+        else:
+            return [Graph(self.all_articles, [keys_set], self, model_bool)]
+        
+        print(articles, skewness, std, ave, l, len(article_compe), '902')
+        
+        
+                                    
+        places = np.sort(article_compe)[(n_-l):n_]
+        article_indexes = np.array(article_indexes)
+        
+        
+        result = set([int(article) for article in article_indexes[np.in1d(article_compe, places)]])
+        #result.update(articles)
+        
+        X, y = self.get_article_covariates(self.all_articles, keys_set)
+        
+        Logistic.fit(X, y)
+        
+        if len(Logistic.model_) > 1:                
+            model_bool = np.append(model_bool, Logistic.model_[Logistic.coef_[Logistic.coef_ != 0] > 0])                
+            model_bool = np.setdiff1d(model_bool, 0)
+                
+        if model_bool.shape[0] > 0:            
+            model_bool.flatten()  
+            model_bool = np.unique(model_bool)             
+        else:
+            model_bool = None
+        
+        
+        
+        if not model_bool is None:            
+            MODEL.extend(model_bool)
+            MODEL = list(np.unique(MODEL))            
+            
+        print(model_bool, MODEL, '893')
+            
+        if l > 0 and l < len(self.all_articles) and len(MODEL) > 0:
+            graph2 = Graph(result, [keys_set], self, model_bool)#collector
+            graph3 = Graph(self.all_articles - result, [keys_set], self, model_bool)#collector
+            
+            final_graphs_list.append(graph3)
+            final_graphs_list.append(graph2)
+            
+            return final_graphs_list
+            
+        else:
+            return [Graph(self.all_articles, [keys_set], self, model_bool)]
+        
+        
+        
+        
 
     #####
     def graph_refresher(self):
@@ -1110,9 +1110,9 @@ class Environment(object):
                         
                         self.timer[i] += 1
 
-                    				
-                    				
-                    				
+                        
+                        
+                        
         print('final', times, self.timer)
         
     def plot(self, number_of_agents):
@@ -1153,18 +1153,18 @@ ALPHA_BETWEEN = 0.1
 GREEDY = 13
 
 def main():
-				
-				DR = DataReader()
-				C = Collector()
-				A = ArticlesCollector()
-				E = Environment()
-				alpha = 0.06
-				AG = Agent_model_UCB1(A, C, alpha)
-				
-				
-				E.run([AG], DR)
-				E.plot(len([AG]))
-				
-				
+    
+    DR = DataReader()
+    C = Collector()
+    A = ArticlesCollector()
+    E = Environment()
+    alpha = 0.06
+    AG = Agent_model_UCB1(A, C, alpha)
+    
+    
+    E.run([AG], DR)
+    E.plot(len([AG]))
+    
+    
 if __name__ == '__main__':
     main()
